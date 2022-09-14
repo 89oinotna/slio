@@ -1,7 +1,6 @@
 This package contains a simple implementation for
 SLIO; an extension to LIO for enforcing dynamic
-policies. For more information on SLIO, see
-->   http://slio.bitbucket.org   <-
+policies.
 
 In this package you find:
 - SimpleStLIO  -- The simple implementation of SLIO
@@ -13,4 +12,4 @@ In this package you find:
   in the folder DCLabels/
 - explore/  -- A folder containing code samples used
   in the paper "Dynamic Enforcement of Dynamic
-  Policies" (see the SLIO web page).
+  Policies".
