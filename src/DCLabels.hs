@@ -1,6 +1,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 module DCLabels
   ( -- * Label data structure:
     module DCLabels.Core,
@@ -57,11 +59,14 @@ dcImpliesBoth l1 l2 =
 noPriv :: DCPriv
 noPriv = DCPrivTCB dcTrue
 
-instance Monoid DCPriv where
-  mempty = noPriv
-  mappend p1 p2 = mintTCB . dcReduce $!
+instance Semigroup DCPriv where
+  p1 <> p2 = mintTCB . dcReduce $!
                    privDesc p1 `dcAnd` privDesc p2
 
+
+instance Semigroup DCPriv => Monoid DCPriv where
+  mempty = noPriv
+ -- mappend p1 p2 = < > 
 
 
 {----------------------------------------}

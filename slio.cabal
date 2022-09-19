@@ -1,0 +1,91 @@
+Cabal-Version:  2.4
+Name:           slio
+Version:        0.0.0.1
+build-type:     Simple
+Description:
+  SLIO
+
+library
+  exposed-modules:
+    SimpleStLIO
+    DLM
+    DCLabels.Core
+    DCLabels.DSL
+    DCLabels.TCB
+    SimpleStLIOUtil
+    DCLabels
+  hs-source-dirs:
+    src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,hashable
+  default-language: Haskell2010
+
+
+test-suite dlmtest
+  type: exitcode-stdio-1.0
+  main-is:  DLMExample.hs
+  hs-source-dirs:
+    test
+    ,src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,hashable
+    ,slio
+  default-language: Haskell2010
+
+
+test-suite cond
+  type: exitcode-stdio-1.0
+  main-is:  ConditionalStateChange.hs
+  hs-source-dirs:
+    test,
+    src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,hashable
+    ,slio
+  default-language: Haskell2010
+
+test-suite dyn
+  type: exitcode-stdio-1.0
+  main-is:  DynamicUserHierarchy.hs
+  hs-source-dirs:
+    test,
+    src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,hashable
+    ,slio
+  default-language: Haskell2010
+
+test-suite facets
+  type: exitcode-stdio-1.0
+  main-is:  Facets.hs
+  hs-source-dirs:
+    test,
+    src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,hashable
+    ,slio
+  other-modules:
+    SimpleStLIO,
+    SimpleStLIOUtil
+  default-language: Haskell2010
+

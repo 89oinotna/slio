@@ -1,8 +1,8 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, DoAndIfThenElse #-}
 -- | This module implements the confidential part of the DLM as described in
 -- [1]  Myers, Liskov, "Protecting Privacy using the Decentralized Label Mode" 
 --      ACM, 1999.
-module DLM 
+module DLM
   ( Principal
   , Component(..)
   , DLMLabel(..)
@@ -54,7 +54,7 @@ instance Label DLMLabel DLMState where
         ) lbl1
    where acts_for_rt p1 p2 = (p1, p2) `elem` (reflTransClosure (acts_for st))
 
-  
+
   -- | When changing the declassification state to True, any flow becomes
   -- possible so the upper set is increased. Otherwise:
   -- Take all principals in the label (owner or reader). The new state should
@@ -62,7 +62,7 @@ instance Label DLMLabel DLMState where
   incUpperSet oldSt newSt (DLMLabel lbl)  =
     let lblPrincs = concatMap getAllPrincipals lbl
         princs    = nub $ [e | (e,_) <- (acts_for newSt)] ++ [e | (_,e) <- (acts_for newSt)]
-    in (not (declassifying oldSt) && declassifying newSt) || 
+    in (not (declassifying oldSt) && declassifying newSt) ||
        any (\lp ->
          any (\p -> not (p `acts_for_old` lp) && p `acts_for_new` lp
              ) princs
@@ -96,10 +96,9 @@ declassify lblVal (DLMLabel tgtLbl) = do
   let authCheckLbl = tgtLbl ++ [Component p [] | p <- authority st]
   let lbl          = labelOf lblVal
   if lrt st lbl (DLMLabel authCheckLbl)
-  then do res <- toLabeled (DLMLabel tgtLbl) $ 
+  then do res <- toLabeled (DLMLabel tgtLbl) $
             do setState (st {declassifying = True})
-               val <- unlabel lblVal
-               return val
+               unlabel lblVal
           return (Just res)
   else return Nothing
 

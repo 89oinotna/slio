@@ -1,4 +1,4 @@
-module DLMExample where
+module Main (main) where
 
 import DLM
 import SimpleStLIO -- Used only for debugging / inspecting!

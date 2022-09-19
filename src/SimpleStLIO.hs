@@ -7,12 +7,20 @@ module SimpleStLIO
         toLabeled)
 where
 
+
+
 import Control.Applicative
+
+
+import Prelude hiding (fail)
+import Control.Monad.Fail (MonadFail (..))
+
 import Control.Monad hiding (guard)
 import Data.List
 import Data.IORef
 
-data LIOState l st = LIOState { lcurr :: [l], scurr :: st }
+data LIOState l st = LIOState { lcurr :: [l], scurr :: st } 
+  deriving (Show)
 
 data SLIO l st a = SLIO { unSLIO :: LIOState l st -> IO (a, LIOState l st) }
 
@@ -21,6 +29,8 @@ instance Monad (SLIO l st) where
   SLIO f >>= g = SLIO $ \s ->
     do (x,s') <- f s
        unSLIO (g x) s'
+
+instance MonadFail (SLIO l st) where
   fail err = SLIO (\_ -> fail err)
 
 instance Functor (SLIO l st) where
@@ -31,6 +41,7 @@ instance Applicative (SLIO l st) where
   (<*>) = ap
 
 class Eq l => Label l st where
+  -- check to ensure that l1 lis less restricrtive than l2 in s
   lrt :: st -> l -> l -> Bool
   incUpperSet :: st -> st -> l -> Bool
 
@@ -63,8 +74,7 @@ guard :: Label l st => l -> SLIO l st ()
 guard l = do lcurr <- getLabel
              scurr <- getState
              let checkPassed = check scurr lcurr l
-             when (not checkPassed) (lioError "label check failed")
-             return ()
+             unless checkPassed (lioError "label check failed")
 
 io :: Label l st => IO a -> SLIO l st a
 io m = SLIO (\s -> fmap (,s) m)
@@ -98,10 +108,10 @@ writeLIORef (LIORef l ref) v = do guard l
 
 labelOfRef :: LIORef l a -> l
 labelOfRef (LIORef l ref) = l
-                                  
+
 toLabeled :: Label l st => l -> SLIO l st a -> SLIO l st (Labeled l a)
 toLabeled l m = SLIO (\s ->
-                 do (x,LIOState lcurr scurr) <- unSLIO m s        
+                 do (x,LIOState lcurr scurr) <- unSLIO m s
                     let checkPassed = check scurr lcurr l
                     when (not checkPassed) (lioError "label check failed")
                     return (Lb l x, s))

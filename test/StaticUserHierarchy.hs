@@ -6,7 +6,7 @@
 --   Bob     Carl
 --     ^    ^
 --      Dave
-module StaticUserHierarchy where
+module Main where
 
 import SimpleStLIO
 
@@ -39,3 +39,8 @@ interfering = do
   -- information flows:
   reportTo infoCarl aliceFile
   reportTo infoCarl bobFile    -- Violation detected.
+
+main :: IO ()
+main = do
+  (r, s) <- unSLIO interfering initState
+  putStrLn $ "Result:        " ++ show r

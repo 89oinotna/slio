@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 -- | This module demonstrates why the 'incUpperSet' check is necessary, as
 -- explained in the paper on Stateful LIO.
-module ConditionalStateChange where
+module Main where
 
 import SimpleStLIO
 import SimpleStLIOUtil
@@ -37,5 +37,11 @@ leak = do
   _ <- toLabeled High $ do
     h <- unlabel highData
     when (h == 0) (setState True >> writeLIORef lowRef 0)
-  v <- readLIORef lowRef
-  return v
+  readLIORef lowRef
+
+
+main :: IO ()
+main = do
+  (r, s) <- unSLIO leak initState
+  putStrLn $ "Result:        " ++ show r
+

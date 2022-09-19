@@ -7,7 +7,7 @@
 --   Bob     Carl   -->   Dave    Carl
 --     ^    ^
 --      Dave              Alice  (no relation to any other user)
-module DynamicUserHierarchy where
+module Main where
 
 import SimpleStLIO
 import SimpleStLIOUtil
@@ -16,7 +16,9 @@ import Data.List ((\\))
 
 data User = Alice | Bob | Carl | Dave
   deriving (Eq)
+  
 data Rel = Rel [(User,User)]
+
 instance Label User Rel where
   lrt (Rel st) lbl1 lbl2  =  (lbl1,lbl2) `elem` reflTransClosure st
   -- Check if there is any user who may see information
@@ -58,3 +60,8 @@ interfering = do
   aliceLeaves
   reportTo infoCarl bobFile
   reportTo infoCarl aliceFile  -- Violation detected.
+
+main :: IO ()
+main = do
+  (r, s) <- unSLIO interfering initState
+  putStrLn $ "Result:        " ++ show r
