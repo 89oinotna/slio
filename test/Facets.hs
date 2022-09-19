@@ -51,10 +51,10 @@ escape input= do
 timetransitive :: SLIO User Rel String
 timetransitive = do
     input <- label Input "malicious code"
-    x <- traceShow "prova" $ escape input
+    x <- escape input
     disallowIS
     allowSD
-    rel <- traceShow "prova" getState
+    rel <- getState
     let (Rel st) = rel
     traceShow (show st) setState(Rel st)
     db <- newLIORef DB ""
