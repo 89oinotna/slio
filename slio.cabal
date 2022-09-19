@@ -71,9 +71,9 @@ test-suite dyn
     ,slio
   default-language: Haskell2010
 
-test-suite facets
+test-suite timetransitive
   type: exitcode-stdio-1.0
-  main-is:  Facets.hs
+  main-is:  TimeTransitive.hs
   hs-source-dirs:
     test,
     src
