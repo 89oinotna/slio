@@ -43,8 +43,8 @@ allowSD = do
     let (Rel st) = rel
     setState (Rel $ st ++ [(Sanitizer, DB)])
 
-escape :: Labeled User String -> SLIO User Rel String
-escape input= do 
+escape :: Labeled User String -> SLIO User Rel (Labeled User String)
+escape input= toLabeled Sanitizer $ do 
     i <- unlabel input
     return $ "escaped " ++ i
 
@@ -52,6 +52,7 @@ timetransitive :: SLIO User Rel String
 timetransitive = do
     input <- label Input "malicious code"
     x <- escape input
+    xx <- unlabel x
     disallowIS
     allowSD
     rel <- getState
@@ -59,8 +60,8 @@ timetransitive = do
     traceShow (show st) setState(Rel st)
     db <- newLIORef DB ""
 --    xx <- unlabel x
-    writeLIORef db x--x
-    return x--x
+    writeLIORef db xx--x
+    return xx--x
 
 
 main :: IO ()
