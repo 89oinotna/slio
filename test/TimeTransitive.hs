@@ -67,8 +67,8 @@ timetransitive2 = do
     x <- escape input
     disallowIS
     traceShow x allowSD
-    xx <- unlabel x
-    db <- label DB xx
+--    xx <- unlabel x
+    db <- relabel x DB
 --    xx <- unlabel x
     unlabel db
 
