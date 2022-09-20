@@ -7,6 +7,8 @@ import SimpleStLIO
 import SimpleStLIOUtil
 
 import Data.List ((\\))
+import SimpleStLIO (unlabel, newLIORef)
+import Debug.Trace (traceShowM)
 
 data User = Input | Sanitizer | DB
   deriving (Eq, Show)
@@ -22,7 +24,7 @@ instance Label User Rel where
   -- the upper set is increased.
   incUpperSet (Rel oldSt) (Rel newSt) user =
     let others = [u | (_,u) <- newSt]
-    in any (\u -> not (lrt (Rel oldSt) user u) &&
+    in traceShow others $ any (\u -> not (lrt (Rel oldSt) user u) &&
                       lrt (Rel newSt) user u
            ) others
 
@@ -48,24 +50,30 @@ escape input= toLabeled Sanitizer $ do
     i <- unlabel input
     return $ "escaped " ++ i
 
-timetransitive :: SLIO User Rel String
-timetransitive = do
+--timetransitive :: SLIO User Rel String
+--timetransitive = do
+--    input <- label Input "malicious code"
+--    x <- escape input
+--    xx <- unlabel x
+--    disallowIS
+--    traceShow "allowing" allowSD
+--    db <- label DB xx
+--    xx <- unlabel x
+--    unlabel db
+
+timetransitive2 :: SLIO User Rel String
+timetransitive2 = do
     input <- label Input "malicious code"
     x <- escape input
-    xx <- unlabel x
     disallowIS
-    allowSD
-    rel <- getState
-    let (Rel st) = rel
-    traceShow (show st) setState(Rel st)
-    db <- newLIORef DB ""
+    traceShow x allowSD
+    xx <- unlabel x
+    db <- label DB xx
 --    xx <- unlabel x
-    writeLIORef db xx--x
-    return xx--x
-
+    unlabel db
 
 main :: IO ()
 main = do
-    (r, s) <- unSLIO timetransitive initState
+    (r, s) <- unSLIO timetransitive2 initState
     print r
     print s

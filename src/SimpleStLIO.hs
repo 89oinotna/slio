@@ -46,7 +46,7 @@ class Eq l => Label l st where
   incUpperSet :: st -> st -> l -> Bool
 
 data Labeled l a = Lb l a
-                 deriving Eq
+                 deriving (Eq, Show)
 
 data LIORef l a = LIORef l (IORef a)
 
