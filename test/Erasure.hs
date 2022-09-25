@@ -38,16 +38,17 @@ disallowCM = do
     let (Rel st) = rel
     setState (Rel $ st \\ [(Card, Merch)])
 
-relabeling :: SLIO User Rel String
-relabeling = do
-    credit_card <- label Card "code"
-    uc <- unlabel credit_card
-    copy <- newLIORef Merch uc
+erasure :: SLIO User Rel String
+erasure = do
+    card <- label Card "code"
+    -- uc <- unlabel credit_card
+    -- copy <- newLIORef Merch uc
+    copy <- relabel card Merch
     disallowCM
-    readLIORef copy
+    unlabel copy
 
 main :: IO ()
 main = do
-    (r, s) <- unSLIO relabeling initState
+    (r, s) <- unSLIO erasure initState
     print r
     print s

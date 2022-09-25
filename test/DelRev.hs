@@ -7,10 +7,10 @@ import SimpleStLIO
 import SimpleStLIOUtil
 
 import Data.List ((\\))
-import SimpleStLIO (newLIORef, writeLIORef, readLIORef, unlabel)
-import DLM (relabel)
+import SimpleStLIO (unlabel)
+import Control.Monad (forever)
 
-data User = Data | App
+data User = Book | Alice
   deriving (Eq, Show)
 
 newtype Rel = Rel [(User,User)] deriving (Show)
@@ -30,28 +30,41 @@ instance Label User Rel where
 
 initState :: LIOState User Rel
 initState = LIOState { lcurr = []
-                     , scurr = Rel [(Data,App)]
+                     , scurr = Rel []
                      }
 
-disallowDA :: SLIO User Rel ()
-disallowDA = do
+allowBA :: SLIO User Rel ()
+allowBA = do
     rel <- getState
     let (Rel st) = rel
-    setState (Rel [])
+    setState (Rel $ st ++ [(Book, Alice)])
 
-directRelease :: SLIO User Rel String
-directRelease = do
-    dat <- label Data "data"
-    disallowDA
-    -- udat <- unlabel dat
-    -- o <- newLIORef App udat
-    -- readLIORef o
-    ad <- relabel dat App
-    unlabel ad
+disallowBA :: SLIO User Rel ()
+disallowBA = do
+    rel <- getState
+    let (Rel st) = rel
+    setState (Rel $ st \\[(Book, Alice)])
 
+takeNotes :: Labeled User String -> SLIO User Rel (Labeled User String)
+takeNotes input= do 
+    i <- unlabel input
+    label Alice $ "takeNotesd " ++ i
+--     relabel input Alice
+
+
+dr = do
+    book <- label Book "libro"
+    allowBA
+    notes <- takeNotes book
+    n <- unlabel notes
+    disallowBA
+    b <- relabel book Alice
+    --book <- unlabel b
+    unlabel notes
+    --return b
 
 main :: IO ()
 main = do
-    (r, s) <- unSLIO directRelease initState
+    (r, s) <- unSLIO dr initState
     print r
     print s
