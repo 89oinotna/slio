@@ -14,6 +14,7 @@ import Control.Applicative
 
 import Prelude hiding (fail)
 import Control.Monad.Fail (MonadFail (..))
+import Debug.Trace
 
 import Control.Monad hiding (guard)
 import Data.List

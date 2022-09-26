@@ -216,3 +216,21 @@ test-suite delrev
     SimpleStLIO,
     SimpleStLIOUtil
   default-language: Haskell2010
+
+test-suite sub
+  type: exitcode-stdio-1.0
+  main-is:  Sub.hs
+  hs-source-dirs:
+    test,
+    src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,hashable
+    ,slio
+  other-modules:
+    SimpleStLIO,
+    SimpleStLIOUtil
+  default-language: Haskell2010
