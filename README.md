@@ -21,4 +21,4 @@ In this package you find:
 - lset (lcurr) is the set of labels  present in the computation
   - reading: when an information becomes accessible then lset is extended with the information label as set union
   - writing: when writing it checks that ∀l ∈ lset ⇒ l ⊑s lr so that if all the labels in the computation are allowed to flow to the label we are writing
-- policy changes: checks if the new state does not allow flows from labels in lset that were previously disallowed (to prevent conditionally allowing flows)
+- policy changes: checks if the new state does not allow flows from labels in lset that were previously disallowed (to prevent conditionally allowing flows) by checking if ∀l ∈ lset ⇒ ¬(incUpperSet s1 s2 l)
