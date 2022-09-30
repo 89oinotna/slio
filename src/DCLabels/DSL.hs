@@ -1,6 +1,5 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE TypeSynonymInstances,
-             FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 {-|
   This module implements a ``nano``, very simple, embedded domain
@@ -60,6 +59,7 @@ where
   * @ 'canFlowToP' pr dc1 dc2 = True@
 
 -}
+
 
 module DCLabels.DSL (
   -- * Operators

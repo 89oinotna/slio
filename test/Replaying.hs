@@ -7,9 +7,9 @@ import SimpleStLIO
 import SimpleStLIOUtil
 
 import Data.List ((\\))
-import SimpleStLIO (newLIORef, writeLIORef, readLIORef)
+import SimpleStLIO (newLIORef, writeLIORef, readLIORef, LIOState (tlab))
 
-data User = NSA | Military
+newtype User = User String
   deriving (Eq, Show)
 
 newtype Rel = Rel [(User,User)] deriving (Show)
@@ -29,7 +29,8 @@ instance Label User Rel where
 
 initState :: LIOState User Rel
 initState = LIOState { lcurr = []
-                     , scurr = Rel [(NSA, Military)]
+                     , scurr = Rel [(User "NSA", User "Military")]
+                     , tlab = []
                      }
 
 disallowNM :: SLIO User Rel ()
@@ -38,11 +39,11 @@ disallowNM = do
     let (Rel st) = rel
     setState (Rel [])
 
-replying :: SLIO User Rel String
-replying = do
-    file <- label NSA "secret"
+replaying :: SLIO User Rel String
+replaying = do
+    file <- label (User "NSA") "secret"
     file <- unlabel file
-    mil <- newLIORef Military file
+    mil <- newLIORef (User "Military") file
     writeLIORef mil ""
     disallowNM
     writeLIORef mil file
@@ -51,6 +52,6 @@ replying = do
 
 main :: IO ()
 main = do
-    (r, s) <- unSLIO replying initState
+    (r, s) <- unSLIO replaying initState
     print r
     print s
