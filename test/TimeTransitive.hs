@@ -7,8 +7,8 @@ import SimpleStLIO
 import SimpleStLIOUtil
 
 import Data.List ((\\))
-import SimpleStLIO (unlabel, newLIORef)
-import Debug.Trace (traceShowM)
+import SimpleStLIO (unlabel, newLIORef, getLabel)
+import Debug.Trace (traceShow)
 
 data User = Input | Sanitizer | DB
   deriving (Eq, Show)
@@ -31,6 +31,7 @@ instance Label User Rel where
 initState :: LIOState User Rel
 initState = LIOState { lcurr = []
                      , scurr = Rel [(Input, Sanitizer)]
+                     , tlab = []
                      }
 
 disallowIS :: SLIO User Rel ()
@@ -47,7 +48,7 @@ allowSD = do
 
 escape :: Labeled User String -> SLIO User Rel (Labeled User String)
 escape input= toLabeled Sanitizer $ do 
-    i <- unlabel input
+    i <- traceShow "relabel" $ unlabel input
     return $ "escaped " ++ i
 
 --timetransitive :: SLIO User Rel String
@@ -63,14 +64,19 @@ escape input= toLabeled Sanitizer $ do
 
 timetransitive2 :: SLIO User Rel String
 timetransitive2 = do
-    input <- label Input "malicious code"
+    input <- labelT Input "malicious code"
+    --xx <- unlabel input
+    --x <- relabel input Sanitizer
     x <- escape input
-    disallowIS
+    l <- getLabel
+    traceShow l disallowIS
     traceShow x allowSD
 --    xx <- unlabel x
     db <- relabel x DB
 --    xx <- unlabel x
     unlabel db
+    l <- getLabel
+    traceShow l $ unlabel db 
 
 main :: IO ()
 main = do

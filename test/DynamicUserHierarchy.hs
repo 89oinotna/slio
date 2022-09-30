@@ -15,7 +15,7 @@ import SimpleStLIOUtil
 import Data.List ((\\))
 
 data User = Alice | Bob | Carl | Dave
-  deriving (Eq)
+  deriving (Eq, Show)
   
 data Rel = Rel [(User,User)]
 

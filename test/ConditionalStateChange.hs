@@ -9,7 +9,7 @@ import SimpleStLIOUtil
 import Control.Monad (when)
 
 data SecLevel = High | Low
-  deriving (Eq)
+  deriving (Eq, Show)
 
 instance Label SecLevel Bool where
   -- | Information flow from High to Low only allowed iff bool is set to True.

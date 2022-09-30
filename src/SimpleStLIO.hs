@@ -1,10 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses, TupleSections #-}
 module SimpleStLIO
-       (SLIO(..), Labeled, LIORef, Label(..), LIOState(..),
+       (SLIO(..), Labeled,  LIORef, Label(..), LIOState(..),
         label, unlabel, labelOf, relabel,
         getLabel, getState, setState,
         newLIORef, writeLIORef, readLIORef, labelOfRef,
-        toLabeled)
+        toLabeled, labelT)
 where
 
 
@@ -14,16 +14,17 @@ import Control.Applicative
 
 import Prelude hiding (fail)
 import Control.Monad.Fail (MonadFail (..))
-import Debug.Trace
 
 import Control.Monad hiding (guard)
 import Data.List
 import Data.IORef
 
-data LIOState l st = LIOState { lcurr :: [l], scurr :: st } 
+import Debug.Trace (traceShow)
+
+data LIOState l st = LIOState { lcurr :: [l], scurr :: st, tlab :: [l] }
   deriving (Show)
 
-data SLIO l st a = SLIO { unSLIO :: LIOState l st -> IO (a, LIOState l st) }
+newtype SLIO l st a = SLIO { unSLIO :: LIOState l st -> IO (a, LIOState l st) }
 
 instance Monad (SLIO l st) where
   return x = SLIO (\s -> return (x, s))
@@ -41,13 +42,17 @@ instance Applicative (SLIO l st) where
   pure = return
   (<*>) = ap
 
-class Eq l => Label l st where
+class (Eq l, Show l) => Label l st where
   -- check to ensure that l1 lis less restricrtive than l2 in s
   lrt :: st -> l -> l -> Bool
   incUpperSet :: st -> st -> l -> Bool
 
-data Labeled l a = Lb l a
+
+data Labeled l a = Lb l a | TLb l a
                  deriving (Eq, Show)
+
+-- data TransientLabeled l a=TLb l a 
+--                 deriving (Eq, Show)
 
 data LIORef l a = LIORef l (IORef a)
 
@@ -62,12 +67,12 @@ getState :: Label l st => SLIO l st st
 getState = SLIO (\s -> return (scurr s, s))
 
 setState :: Label l st => st -> SLIO l st ()
-setState st = SLIO (\(LIOState lcurr scurr) ->
+setState st = SLIO (\(LIOState lcurr scurr tlab) ->
                       do when (any (incUpperSet scurr st) lcurr) (lioError "incUpperClosure check failed")
-                         return ((), LIOState lcurr st))
+                         return ((), LIOState lcurr st tlab))
 
 taint :: Label l st => l -> SLIO l st ()
-taint l = SLIO (\(LIOState lcurr scurr) -> return ((), LIOState (nub (l : lcurr)) scurr))
+taint l = SLIO (\(LIOState lcurr scurr tlab) -> return ((), LIOState (nub (l : lcurr)) scurr tlab))
 
 check scurr lcurr l = and [ lrt scurr x l | x <- lcurr ]
 
@@ -85,11 +90,22 @@ io m = SLIO (\s -> fmap (,s) m)
 label :: Label l st => l -> a -> SLIO l st (Labeled l a)
 label l x = guard l >> return (Lb l x)
 
+labelT :: Label l st => l -> a -> SLIO l st (Labeled l a)
+labelT l x = guard l >> return (TLb l x)
+
 unlabel :: Label l st => Labeled l a -> SLIO l st a
 unlabel (Lb l x) = taint l >> return x
+unlabel (TLb l x)= taint l >> taintT l >> return x
+
+-- unlabelT :: Label l st => TransientLabeled l a -> SLIO l st a
+-- unlabelT (TLb l x) = taint l >> taintT l >> return x
+
+taintT :: Label l st => l -> SLIO l st ()
+taintT l = SLIO (\(LIOState lcurr scurr tlab) -> return ((), LIOState lcurr scurr (nub (l : tlab))))
 
 labelOf :: Labeled l a -> l
 labelOf (Lb l x) = l
+labelOf (TLb l x)=l
 
 relabel :: Label l st => Labeled l a -> l -> SLIO l st (Labeled l a)
 relabel lblVal lbl = toLabeled lbl (unlabel lblVal)
@@ -112,7 +128,9 @@ labelOfRef (LIORef l ref) = l
 
 toLabeled :: Label l st => l -> SLIO l st a -> SLIO l st (Labeled l a)
 toLabeled l m = SLIO (\s ->
-                 do (x,LIOState lcurr scurr) <- unSLIO m s
-                    let checkPassed = check scurr lcurr l
+                 let LIOState ll ss tt=  s in
+                  traceShow ll $
+                 do (x,LIOState lcurr scurr tlab) <- unSLIO m s
+                    let checkPassed = traceShow ("lcurr:"++show lcurr) $ check scurr lcurr l
                     when (not checkPassed) (lioError "label check failed")
-                    return (Lb l x, s))
+                    return (Lb l x, LIOState (nub tlab++ll) ss (nub tt++tlab)))
