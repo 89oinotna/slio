@@ -1,0 +1,19 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:slio"
+
+    - path: "test"
+      component: "slio:test:timetransitive"
+
+    - path: "src"
+      component: "slio:test:timetransitive"
+
+    - path: "test"
+      component: "slio:test:replying"
+
+    - path: "test"
+      component: "slio:test:whitelisting"
+
+    - path: "src"
+      component: "slio:test:whitelisting"
