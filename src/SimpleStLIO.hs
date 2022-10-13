@@ -44,8 +44,8 @@ instance Applicative (SLIO l st) where
 
 class (Eq l, Show l) => Label l st where
   -- check to ensure that l1 lis less restricrtive than l2 in s
-  lrt :: st -> l -> l -> Bool
-  incUpperSet :: st -> st -> l -> Bool
+  lrt :: st -> [l] -> l -> l -> Bool
+  incUpperSet :: st -> st -> [l] -> l -> Bool
 
 
 data Labeled l a = Lb l a | TLb l a
@@ -68,13 +68,13 @@ getState = SLIO (\s -> return (scurr s, s))
 
 setState :: Label l st => st -> SLIO l st ()
 setState st = SLIO (\(LIOState lcurr scurr tlab) ->
-                      do when (any (incUpperSet scurr st) lcurr) (lioError "incUpperClosure check failed")
+                      do when (any (incUpperSet scurr st lcurr) lcurr) (lioError "incUpperClosure check failed")
                          return ((), LIOState lcurr st tlab))
 
 taint :: Label l st => l -> SLIO l st ()
 taint l = SLIO (\(LIOState lcurr scurr tlab) -> return ((), LIOState (nub (l : lcurr)) scurr tlab))
 
-check scurr lcurr l = and [ lrt scurr x l | x <- lcurr ]
+check scurr lcurr l = and [ lrt scurr lcurr x l | x <- lcurr ]
 
 guard :: Label l st => l -> SLIO l st ()
 guard l = do lcurr <- getLabel
@@ -129,7 +129,6 @@ labelOfRef (LIORef l ref) = l
 toLabeled :: Label l st => l -> SLIO l st a -> SLIO l st (Labeled l a)
 toLabeled l m = SLIO (\s ->
                  let LIOState ll ss tt=  s in
-                  traceShow ll $
                  do (x,LIOState lcurr scurr tlab) <- unSLIO m s
                     let checkPassed = traceShow ("lcurr:"++show lcurr) $ check scurr lcurr l
                     when (not checkPassed) (lioError "label check failed")

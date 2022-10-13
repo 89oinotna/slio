@@ -6,30 +6,32 @@ import Debug.Trace
 import SimpleStLIO
 import SimpleStLIOUtil
 
-import Data.List ((\\))
+import Data.List ((\\), nub)
 import SimpleStLIO (newLIORef, writeLIORef, readLIORef, LIOState (tlab))
 
-newtype User = User String
+data User = Military | NSA
   deriving (Eq, Show)
 
 newtype Rel = Rel [(User,User)] deriving (Show)
 
 instance Label User Rel where
-  lrt (Rel st) lbl1 lbl2  =  traceShow (show s) (lbl1,lbl2) `elem` reflTransClosure st
+  -- lcurr must be added to have refl of labels not in st
+  lrt (Rel st) lcurr lbl1 lbl2  =  traceShow (s) (lbl1,lbl2) `elem` s
     where
-        s = reflTransClosure st
+        r = refl lcurr
+        s = reflTransClosure $ nub (st++r)
   -- Check if there is any user who may see information
   -- from this user, and could not do before. If yes,
   -- the upper set is increased.
-  incUpperSet (Rel oldSt) (Rel newSt) user =
+  incUpperSet (Rel oldSt) (Rel newSt) lcurr user =
     let others = [u | (_,u) <- newSt]
-    in any (\u -> not (lrt (Rel oldSt) user u) &&
-                      lrt (Rel newSt) user u
+    in any (\u -> not (lrt (Rel oldSt) lcurr user u) &&
+                      lrt (Rel newSt) lcurr user u
            ) others
 
 initState :: LIOState User Rel
 initState = LIOState { lcurr = []
-                     , scurr = Rel [(User "NSA", User "Military")]
+                     , scurr = Rel []--[(User "Military", User "Military")]
                      , tlab = []
                      }
 
@@ -37,15 +39,15 @@ disallowNM :: SLIO User Rel ()
 disallowNM = do
     rel <- getState
     let (Rel st) = rel
-    setState (Rel [])
+    setState (Rel $ st \\ [])
 
 replaying :: SLIO User Rel String
 replaying = do
-    file <- label (User "NSA") "secret"
+    file <- label (Military) "secret"
     file <- unlabel file
-    mil <- newLIORef (User "Military") file
+    mil <- newLIORef (Military) file
     writeLIORef mil ""
-    disallowNM
+    --disallowNM
     writeLIORef mil file
     readLIORef mil
 

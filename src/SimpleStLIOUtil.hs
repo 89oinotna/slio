@@ -1,5 +1,5 @@
 module SimpleStLIOUtil
-  ( reflTransClosure
+  ( reflTransClosure, refl
   ) where
 
 import Data.List (nub)
@@ -11,6 +11,9 @@ reflTransClosure xs =
   -- All the reflexive relations
   let rxs = [(e,e) | (e,_) <- xs] ++ [(e,e) | (_,e) <- xs]
   in nub $ rxs ++ transClosure xs
+
+refl :: Eq b => [b] -> [(b, b)]
+refl lst = [(e,e) | e <- lst]
 
 -- | Returns the transitive closure of the relations specified in its argument.
 transClosure :: Eq a => [(a,a)] -> [(a,a)]
