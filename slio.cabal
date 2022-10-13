@@ -89,23 +89,23 @@ library
 --     ,slio
 --   default-language: Haskell2010
 
-test-suite timetransitive
-  type: exitcode-stdio-1.0
-  main-is:  TimeTransitive.hs
-  hs-source-dirs:
-    test,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-    base          >= 4.7     && < 6.0
-    ,containers
-    ,bytestring
-    ,hashable
-    ,slio
-  other-modules:
-    SimpleStLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite timetransitive
+--   type: exitcode-stdio-1.0
+--   main-is:  TimeTransitive.hs
+--   hs-source-dirs:
+--     test,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     base          >= 4.7     && < 6.0
+--     ,containers
+--     ,bytestring
+--     ,hashable
+--     ,slio
+--   other-modules:
+--     SimpleStLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
 
 test-suite replying
   import: common-options
@@ -143,23 +143,23 @@ test-suite replying
 --   default-language: Haskell2010
 
 
-test-suite whitelisting
-  type: exitcode-stdio-1.0
-  main-is:  Whitelisting.hs
-  hs-source-dirs:
-    test,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-    base          >= 4.7     && < 6.0
-    ,containers
-    ,bytestring
-    ,hashable
-    ,slio
-  other-modules:
-    SimpleStLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite whitelisting
+--   type: exitcode-stdio-1.0
+--   main-is:  Whitelisting.hs
+--   hs-source-dirs:
+--     test,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     base          >= 4.7     && < 6.0
+--     ,containers
+--     ,bytestring
+--     ,hashable
+--     ,slio
+--   other-modules:
+--     SimpleStLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
 
 -- test-suite relabeling
 --   type: exitcode-stdio-1.0
@@ -269,20 +269,20 @@ test-suite whitelisting
 --     SimpleStLIOUtil
 --   default-language: Haskell2010
  
-test-suite flexlab
-  type: exitcode-stdio-1.0
-  main-is:  FlexLab.hs
-  hs-source-dirs:
-    test,
-    src
-  ghc-options: -package-key -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-    base          >= 4.7     && < 6.0
-    ,containers
-    ,bytestring
-    ,hashable
-    ,slio
-  other-modules:
-    SimpleStLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite flexlab
+--   type: exitcode-stdio-1.0
+--   main-is:  FlexLab.hs
+--   hs-source-dirs:
+--     test,
+--     src
+--   ghc-options: -package-key -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     base          >= 4.7     && < 6.0
+--     ,containers
+--     ,bytestring
+--     ,hashable
+--     ,slio
+--   other-modules:
+--     SimpleStLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010

@@ -60,9 +60,9 @@ instance Applicative (SLIO l st) where
 
 class (Eq l, Show l) => Label l st where
   -- check to ensure that l1 lis less restricrtive than l2 in s
-  lrt :: st -> l -> l -> Bool
+  lrt :: st -> [l] -> l -> l -> Bool
   -- to avoid to conditional allow a flow
-  incUpperSet :: st -> st -> l -> Bool
+  incUpperSet :: st -> st -> [l] -> l -> Bool
 
 data Labeled l a  = Lb l a | NTLb l a| RLb l a Int
              deriving (Eq, Show)
@@ -85,12 +85,11 @@ getReplaying = SLIO (\s -> return (rlab s, s))
 
 setState ::  Label l st => st -> SLIO l st ()
 setState st = SLIO (\(LIOState lcurr scurr ntlab rlab) ->
-                      do when (any (incUpperSet scurr st) lcurr) (lioError "incUpperClosure check failed")
+                      do when (any (incUpperSet scurr st lcurr) lcurr) (lioError "incUpperClosure check failed")
                          return ((), LIOState lcurr st ntlab rlab))
 
 
-
-check scurr lcurr l = and [ lrt scurr x l | x <- lcurr ]
+check scurr lcurr l = and [ lrt scurr lcurr x l | x <- lcurr ]
 
 guard ::  Label l st => l -> SLIO l st ()
 guard l = do lcurr <- getLabel
