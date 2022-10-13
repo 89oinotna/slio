@@ -5,8 +5,9 @@ import Debug.Trace
 
 import SimpleStLIO
 import SimpleStLIOUtil
-
-newtype User = User String
+import Data.List ((\\))
+import Data.Map (Map, lookup, insert, empty)
+data User = NSA | Military
   deriving (Eq, Show)
 
 newtype Rel = Rel [(User, User)] deriving (Show)
@@ -28,25 +29,30 @@ instance Label User Rel where
 
 initState :: LIOState User Rel
 initState = LIOState { lcurr = []
-                     , scurr = Rel [(User "NSA", User "Military")]
+                     , scurr = Rel [(NSA, Military)]
                      , ntlab = []
-                     , plab =[]
+                     , rlab = Data.Map.empty
                      }
 
 disallowNM :: SLIO User Rel ()
 disallowNM = do
     rel <- getState
     let (Rel st) = rel
-    setState (Rel [])
+    setState (Rel $ st \\ [(NSA, Military)])
+
+unlabelAsReplaying :: Label l st => Labeled l a -> l -> SLIO l st a
+unlabelAsReplaying ldata nl=do 
+  d <- relabel ldata nl
+  unlabel d
 
 replaying :: SLIO User Rel String
 replaying = do
-    file <- label (User "NSA") "secret"
-    file <- unlabel file
-    mil <- newLIORef (User "Military") file
+    file <- label (Military) "secret"
+    file1 <- unlabelAsReplaying file (Military)
+    mil <- newLIORef (Military) file1
     writeLIORef mil ""
     disallowNM
-    writeLIORef mil file
+    writeLIORef mil file1
     readLIORef mil
 
 

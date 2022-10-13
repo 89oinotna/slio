@@ -28,7 +28,7 @@ import Data.Map (Map, lookup, insert)
 import Data.Maybe (Maybe)
 
 -- rlab should contain the flow from a replaying label to any label in lcurr (when it was unlabeled)
-data  LIOState l st f= LIOState { lcurr :: [l], scurr :: st, ntlab :: [l], rlab :: Map String (Int ,[(,) Int l]) }
+data  LIOState l st = LIOState { lcurr :: [l], scurr :: st, ntlab :: [l], rlab :: Map String (Int ,[(,) Int l]) }
   deriving (Show)
 
 --data FlowTo l = FlowTo l l
@@ -40,21 +40,21 @@ class (Eq (f l), Eq l) => FlowTo f l where
 --instance FlowTo f a => Diff [] [] (f a) where
   --difference l1 l2= l1 \\ l2
 
-newtype  SLIO l st f a= SLIO { unSLIO :: LIOState l st f -> IO (a, LIOState l st f) }
+newtype  SLIO l st a= SLIO { unSLIO :: LIOState l st  -> IO (a, LIOState l st ) }
 
-instance Monad (SLIO l st f) where
+instance Monad (SLIO l st) where
   return x = SLIO (\s -> return (x, s))
   SLIO f >>= g = SLIO $ \s ->
     do (x,s') <- f s
        unSLIO (g x) s'
 
-instance   MonadFail (SLIO l st f) where
+instance   MonadFail (SLIO l st) where
   fail err = SLIO (\_ -> fail err)
 
-instance Functor (SLIO l st f) where
+instance Functor (SLIO l st) where
   fmap = liftM
 
-instance Applicative (SLIO l st f) where
+instance Applicative (SLIO l st) where
   pure = return
   (<*>) = ap
 
@@ -74,16 +74,16 @@ lioError s = fail s
 
 -- internal primitives
 
-getLabel :: Label l st => SLIO l st f [l]
+getLabel :: Label l st => SLIO l st [l]
 getLabel = SLIO (\s -> return (lcurr s, s))
 
-getState ::  Label l st => SLIO l st f st
+getState ::  Label l st => SLIO l st st
 getState = SLIO (\s -> return (scurr s, s))
 
-getReplaying ::  Label l st => SLIO l st f (Map String (Int, [(,) Int l]))
+getReplaying ::  Label l st => SLIO l st (Map String (Int, [(,) Int l]))
 getReplaying = SLIO (\s -> return (rlab s, s))
 
-setState ::  Label l st => st -> SLIO l st f ()
+setState ::  Label l st => st -> SLIO l st ()
 setState st = SLIO (\(LIOState lcurr scurr ntlab rlab) ->
                       do when (any (incUpperSet scurr st) lcurr) (lioError "incUpperClosure check failed")
                          return ((), LIOState lcurr st ntlab rlab))
@@ -92,30 +92,30 @@ setState st = SLIO (\(LIOState lcurr scurr ntlab rlab) ->
 
 check scurr lcurr l = and [ lrt scurr x l | x <- lcurr ]
 
-guard ::  Label l st => l -> SLIO l st f ()
+guard ::  Label l st => l -> SLIO l st ()
 guard l = do lcurr <- getLabel
              scurr <- getState
              let checkPassed = check scurr lcurr l
              unless checkPassed (lioError "label check failed")
 
-io ::  Label l st => IO a -> SLIO l st f a
+io ::  Label l st => IO a -> SLIO l st a
 io m = SLIO (\s -> fmap (,s) m)
 
 -- exported functions
 
-label ::  Label l st => l -> a -> SLIO l st f (Labeled l a)
+label ::  Label l st => l -> a -> SLIO l st (Labeled l a)
 label l x = guard l >> return (Lb l x)
 
-labelNT ::  Label l st => l -> a -> SLIO l st f (Labeled l a)
+labelNT ::  Label l st => l -> a -> SLIO l st (Labeled l a)
 labelNT l x = guard l >> return (NTLb l x)
 
-labelR :: (FlowTo f l, Label l st) => l -> a -> SLIO l st f (Labeled l a)
+labelR :: (Label l st) => l -> a -> SLIO l st (Labeled l a)
 labelR l x= do
               guard l
               i <- createLabel l
               return (RLb l x i)
 
-createLabel :: (FlowTo f l, Label l st) => l -> SLIO l st f Int
+createLabel :: (Label l st) => l -> SLIO l st Int
 createLabel l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
   let insert n lst=Data.Map.insert (show l) (n,lst) rlab
     in
@@ -127,22 +127,22 @@ createLabel l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
     --insert n [] lcurr=Data.Map.insert (show l) (n,createFlows (n) lcurr) 
     --insert n lst lcurr=Data.Map.insert (show l) (n, lst ++ createFlows (n) lcurr)
 
-unlabel ::  Label l st => Labeled l a -> SLIO l st f a
+unlabel ::  Label l st => Labeled l a -> SLIO l st a
 unlabel (Lb l x) = taint l >> return x
 unlabel (NTLb l x)= taint l >> taintNT l >> return x
 
-unlabelR :: (FlowTo f l, Show l) => Labeled l b -> [l] -> SLIO l st f b
+unlabelR :: (Eq l,Show l) => Labeled l b -> [l] -> SLIO l st b
 --unlabelR (Lb l x) rsinks= taintR l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab)
 unlabelR (NTLb l x) rsinks= taintR l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab)
 unlabelR (Lb l x) rsinks= taintR l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab)
 
-taint ::  Label l st => l -> SLIO l st f ()
+taint ::  Label l st => l -> SLIO l st ()
 taint l = SLIO (\(LIOState lcurr scurr ntlab rlab) -> return ((), LIOState (nub (l : lcurr)) scurr ntlab rlab))
 
-taintNT ::  Label l st => l -> SLIO l st f ()
+taintNT ::  Label l st => l -> SLIO l st ()
 taintNT l = SLIO (\(LIOState lcurr scurr ntlab rlab) -> return ((), LIOState lcurr scurr (nub (l : ntlab)) rlab))
 
-taintR :: (FlowTo f l, Show l) => l -> [l] -> SLIO l st f (Map String (Int, [(Int, l)]))
+taintR :: (Eq l, Show l) => l -> [l] -> SLIO l st (Map String (Int, [(Int, l)]))
 taintR l rsinks= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
   let insert n lst=Data.Map.insert (show l) (n,lst) rlab
       createFlows l = [ (l, ll) | ll <- rsinks]
@@ -161,26 +161,26 @@ labelOf (Lb l x) = l
 labelOf (NTLb l x)=l
 labelOf (RLb l x i)=l -- what about i???
 
-relabel ::  Label l st => Labeled l a -> l -> SLIO l st f (Labeled l a)
+relabel ::  Label l st => Labeled l a -> l -> SLIO l st (Labeled l a)
 relabel lblVal lbl = toLabeled lbl (unlabel lblVal)
 
-newLIORef ::  Label l st => l -> a -> SLIO l st f (LIORef l a)
+newLIORef ::  Label l st => l -> a -> SLIO l st (LIORef l a)
 newLIORef l x = do guard l
                    ref <- io $ newIORef x
                    return (LIORef l ref)
 
-readLIORef ::  Label l st => LIORef l a -> SLIO l st f a
+readLIORef ::  Label l st => LIORef l a -> SLIO l st a
 readLIORef (LIORef l ref) = do taint l
                                io (readIORef ref)
 
-writeLIORef ::  Label l st => LIORef l a -> a -> SLIO l st f ()
+writeLIORef ::  Label l st => LIORef l a -> a -> SLIO l st ()
 writeLIORef (LIORef l ref) v = do guard l
                                   io (writeIORef ref v)
 
 labelOfRef :: LIORef l a -> l
 labelOfRef (LIORef l ref) = l
 
-toLabeled ::  Label l st => l -> SLIO l st f a -> SLIO l st f (Labeled l a)
+toLabeled ::  Label l st => l -> SLIO l st a -> SLIO l st (Labeled l a)
 toLabeled l m = SLIO (\s ->
                  let LIOState ll ss tt pp=  s in
                   traceShow ll $
