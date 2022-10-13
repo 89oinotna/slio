@@ -6,13 +6,12 @@ import Debug.Trace
 import SimpleStLIO
 import SimpleStLIOUtil
 
-import Data.List ((\\))
-import SimpleStLIO (newLIORef, writeLIORef, readLIORef, LIOState (tlab))
-
 newtype User = User String
   deriving (Eq, Show)
 
-newtype Rel = Rel [(User,User)] deriving (Show)
+newtype Rel = Rel [(User, User)] deriving (Show)
+
+
 
 instance Label User Rel where
   lrt (Rel st) lbl1 lbl2  =  traceShow (show s) (lbl1,lbl2) `elem` reflTransClosure st
@@ -30,7 +29,8 @@ instance Label User Rel where
 initState :: LIOState User Rel
 initState = LIOState { lcurr = []
                      , scurr = Rel [(User "NSA", User "Military")]
-                     , tlab = []
+                     , ntlab = []
+                     , plab =[]
                      }
 
 disallowNM :: SLIO User Rel ()
