@@ -107,7 +107,7 @@ library
 --     SimpleStLIOUtil
 --   default-language: Haskell2010
 
-test-suite replying
+test-suite replaying
   import: common-options
   type: exitcode-stdio-1.0
   main-is:  Replaying.hs

@@ -24,7 +24,7 @@ import Control.Monad hiding (guard)
 import Data.List
 import Data.IORef
 import Debug.Trace (traceShow)
-import Data.Map (Map, lookup, insert)
+import Data.Map (Map, lookup, insert, empty)
 import Data.Maybe (Maybe)
 
 -- rlab should contain the flow from a replaying label to any label in lcurr (when it was unlabeled)
@@ -64,7 +64,7 @@ class (Eq l, Show l) => Label l st where
   -- to avoid to conditional allow a flow
   incUpperSet :: st -> st -> [l] -> l -> Bool
 
-data Labeled l a  = Lb l a | NTLb l a| RLb l a Int
+data Labeled l a  = Lb l a | NTLb l a
              deriving (Eq, Show)
 
 
@@ -108,11 +108,11 @@ label l x = guard l >> return (Lb l x)
 labelNT ::  Label l st => l -> a -> SLIO l st (Labeled l a)
 labelNT l x = guard l >> return (NTLb l x)
 
-labelR :: (Label l st) => l -> a -> SLIO l st (Labeled l a)
-labelR l x= do
-              guard l
-              i <- createLabel l
-              return (RLb l x i)
+-- labelR :: (Label l st) => l -> a -> SLIO l st (Labeled l a)
+-- labelR l x= do
+--               guard l
+--               i <- createLabel l
+--               return (RLb l x i)
 
 createLabel :: (Label l st) => l -> SLIO l st Int
 createLabel l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
@@ -129,6 +129,16 @@ createLabel l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
 unlabel ::  Label l st => Labeled l a -> SLIO l st a
 unlabel (Lb l x) = taint l >> return x
 unlabel (NTLb l x)= taint l >> taintNT l >> return x
+
+taintAll :: Label l st => [l] -> SLIO l st ()
+taintAll = foldr ((>>) . taint) (return ())
+
+unlabelAsReplaying :: Label l st => Labeled l b -> [l] -> SLIO l st b
+unlabelAsReplaying ldata lst@(x:xs)=do
+  taintAll xs
+  d <- relabel ldata x
+  unlabel d
+
 
 unlabelR :: (Eq l,Show l) => Labeled l b -> [l] -> SLIO l st b
 --unlabelR (Lb l x) rsinks= taintR l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab)
@@ -158,7 +168,7 @@ taintR l rsinks= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
 labelOf :: Labeled l a -> l
 labelOf (Lb l x) = l
 labelOf (NTLb l x)=l
-labelOf (RLb l x i)=l -- what about i???
+--labelOf (RLb l x i)=l -- what about i???
 
 relabel ::  Label l st => Labeled l a -> l -> SLIO l st (Labeled l a)
 relabel lblVal lbl = toLabeled lbl (unlabel lblVal)

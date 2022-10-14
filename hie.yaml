@@ -4,4 +4,4 @@ cradle:
       component: "lib:slio"
 
     - path: "test"
-      component: "slio:test:replying"
+      component: "slio:test:replaying"
