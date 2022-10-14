@@ -32,6 +32,8 @@ type Principal  =  String
 data Component  =  Component Principal [Principal]  -- Owner and readers.
   deriving (Eq, Show)
 
+
+
 newtype DLMLabel  =  DLMLabel [Component]
   deriving (Eq, Show)
 data DLMState  =  DLMState { declassifying :: Bool
@@ -53,10 +55,9 @@ instance Label DLMLabel DLMState where
           ) lbl2
         ) lbl1
    where
-    acts_for_rt p1 p2 = (p1, p2) `elem` reflTransClosure (curr lcurr ++ acts_for st)
+    acts_for_rt p1 p2 = (p1, p2) `elem` reflTransClosure (nub (curr lcurr ++ acts_for st))
     --curr ((DLMLabel [Component p px]):xs)= (p,p) : [(pp,pp) | pp <- px] ++ curr xs
     --curr []= []
-    curr = foldr (\(DLMLabel [Component p px]) r -> (p,p) : [(pp,pp) | pp <- px] ++ r) []
 
 
   -- | When changing the declassification state to True, any flow becomes
@@ -71,10 +72,13 @@ instance Label DLMLabel DLMState where
          any (\p -> not (p `acts_for_old` lp) && p `acts_for_new` lp
              ) princs
            ) lblPrincs
-   where acts_for_old p1 p2 = (p1, p2) `elem` (reflTransClosure (acts_for oldSt))
-         acts_for_new p1 p2 = (p1, p2) `elem` (reflTransClosure (acts_for newSt))
+   where acts_for_old p1 p2 = (p1, p2) `elem` reflTransClosure (nub $ curr lcurr ++ acts_for oldSt)
+         acts_for_new p1 p2 = (p1, p2) `elem` reflTransClosure (nub $ curr lcurr ++ acts_for newSt)
          getAllPrincipals (Component o rs) = o:rs
 
+
+curr :: [DLMLabel] -> [(Principal, Principal)]
+curr = foldr (\(DLMLabel [Component p px]) r -> (p,p) : [(pp,pp) | pp <- px] ++ r) []
 type DLM = SLIO DLMLabel DLMState
 
 -- Exported functions
