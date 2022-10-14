@@ -32,7 +32,7 @@ type Principal  =  String
 data Component  =  Component Principal [Principal]  -- Owner and readers.
   deriving (Eq, Show)
 
-data DLMLabel  =  DLMLabel [Component]
+newtype DLMLabel  =  DLMLabel [Component]
   deriving (Eq, Show)
 data DLMState  =  DLMState { declassifying :: Bool
                            , authority     :: [Principal]
@@ -42,7 +42,7 @@ data DLMState  =  DLMState { declassifying :: Bool
 instance Label DLMLabel DLMState where
   -- | When we re declassifying any relabelling is allowed. Otherwise, perform
   -- the check as per [1].
-  lrt st (DLMLabel lbl1) (DLMLabel lbl2)  = declassifying st ||
+  lrt st lcurr (DLMLabel lbl1) (DLMLabel lbl2)  = declassifying st ||
     all (\(Component owner1 readers1) ->
       any (\(Component owner2 readers2) ->
                (owner2 `acts_for_rt` owner1)
@@ -52,14 +52,18 @@ instance Label DLMLabel DLMState where
                    ) readers2
           ) lbl2
         ) lbl1
-   where acts_for_rt p1 p2 = (p1, p2) `elem` (reflTransClosure (acts_for st))
+   where
+    acts_for_rt p1 p2 = (p1, p2) `elem` reflTransClosure (curr lcurr ++ acts_for st)
+    --curr ((DLMLabel [Component p px]):xs)= (p,p) : [(pp,pp) | pp <- px] ++ curr xs
+    --curr []= []
+    curr = foldr (\(DLMLabel [Component p px]) r -> (p,p) : [(pp,pp) | pp <- px] ++ r) []
 
 
   -- | When changing the declassification state to True, any flow becomes
   -- possible so the upper set is increased. Otherwise:
   -- Take all principals in the label (owner or reader). The new state should
   -- not increase the upper set in the acts-for hieararchy for any of them.
-  incUpperSet oldSt newSt (DLMLabel lbl)  =
+  incUpperSet oldSt newSt lcurr (DLMLabel lbl)  =
     let lblPrincs = concatMap getAllPrincipals lbl
         princs    = nub $ [e | (e,_) <- (acts_for newSt)] ++ [e | (_,e) <- (acts_for newSt)]
     in (not (declassifying oldSt) && declassifying newSt) ||
@@ -83,6 +87,7 @@ runDLM afh auth comp =
                                             , authority     = auth
                                             , acts_for      = afh
                                             }
+                          , ntlab = []
                          }
                )
 
@@ -93,9 +98,10 @@ declassify :: Labeled DLMLabel a -> DLMLabel
            -> DLM (Maybe (Labeled DLMLabel a))
 declassify lblVal (DLMLabel tgtLbl) = do
   st <- getState
+  lcurr <- getLabel
   let authCheckLbl = tgtLbl ++ [Component p [] | p <- authority st]
   let lbl          = labelOf lblVal
-  if lrt st lbl (DLMLabel authCheckLbl)
+  if lrt st lcurr lbl (DLMLabel authCheckLbl) --lcurr???
   then do res <- toLabeled (DLMLabel tgtLbl) $
             do setState (st {declassifying = True})
                unlabel lblVal
