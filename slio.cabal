@@ -12,6 +12,7 @@ common common-options
                        -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
                        -Wredundant-constraints
+                       -fprint-potential-instances 
   if impl(ghc >= 8.2)
     ghc-options:       -fhide-source-paths
   if impl(ghc >= 8.4)
@@ -25,7 +26,7 @@ library
   import: common-options
   exposed-modules:
     SimpleStLIO
-    DLM
+    -- DLM
   --  DCLabels.Core
   --  DCLabels.DSL
   --  DCLabels.TCB
@@ -111,6 +112,7 @@ test-suite replaying
   import: common-options
   type: exitcode-stdio-1.0
   main-is:  Replaying.hs
+  ghc-options: -XDatatypeContexts
   hs-source-dirs:
     test
   build-depends:
@@ -122,20 +124,20 @@ test-suite replaying
     ,slio
   default-language: Haskell2010
 
-test-suite replaying_dlm
-  import: common-options
-  type: exitcode-stdio-1.0
-  main-is:  Replaying_DLM.hs
-  hs-source-dirs:
-    test
-  build-depends:
-    base          >= 4.7     && < 6.0
-    ,containers
-    ,bytestring
-    ,hashable
-    ,text
-    ,slio
-  default-language: Haskell2010 
+-- test-suite replaying_dlm
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  Replaying_DLM.hs
+--   hs-source-dirs:
+--     test
+--   build-depends:
+--     base          >= 4.7     && < 6.0
+--     ,containers
+--     ,bytestring
+--     ,hashable
+--     ,text
+--     ,slio
+--   default-language: Haskell2010 
 
 
 -- test-suite direct
