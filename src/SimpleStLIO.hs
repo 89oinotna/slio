@@ -131,6 +131,7 @@ label l x = do
   i <- getNewId l
   return (Lb l x i)
 
+-- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
 labelNT ::  (Replaying r  l st,Label l st) => l -> a -> SLIO l st r (Labeled l a)
 labelNT l x = do
   guard l
