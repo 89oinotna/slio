@@ -50,9 +50,9 @@ instance Label User Rel (Rep) where
   lrt (Rel st) lcurr rlab lbl1 lbl2 =
     (traceShow (show s ++ "nrlab:" ++ show nrlab) (lbl1, lbl2) `elem` s) ||
      --  check that for each id the replaying is allowed
-                                             checkR nrlab lbl1 lbl2 
+                                             checkR nrlab lbl1 lbl2 -- TODO: reflexive transitive closure on rlab
    where
-    r = refl $ lbl1:lbl2:lcurr -- TODO: find an example where is useful that lbl1 and lbl2 are inserted there
+    r = refl $ lbl1:lbl2:lcurr
     --Rel rst = inject rlab st
     s = reflTransClosure $ nub (st ++ r)
     nrlab = foldr
@@ -88,12 +88,11 @@ instance Label User Rel (Rep) where
           others
 
 initState :: LIOState User Rel (Rep)
-initState = LIOState
-  { lcurr = []
-  , scurr = Rel [(User "NSA", User "Military"), (User "Military", User "Another")]
-  , ntlab = []
-  , rlab  = Data.Map.empty
-  }
+initState = LIOState { lcurr = []
+                     , scurr = Rel [(User "NSA", User "Military")]
+                     , ntlab = []
+                     , rlab  = Data.Map.empty
+                     }
 
 disallowNM :: SLIO User Rel (Rep) ()
 disallowNM = do
@@ -101,47 +100,62 @@ disallowNM = do
   let (Rel st) = rel
   setState (Rel $ st \\ [(User "NSA", User "Military")])
 
+disallowMB :: SLIO User Rel (Rep) ()
+disallowMB = do
+  rel <- getState
+  let (Rel st) = rel
+  setState (Rel $ st \\ [(User "Military", User "Another")])
+
+allowMB :: SLIO User Rel (Rep) ()
+allowMB = do
+  rel <- getState
+  let (Rel st) = rel
+  setState (Rel $ st ++ [(User "Military", User "Another")])
+
+allowNM :: SLIO User Rel (Rep) ()
+allowNM = do
+    rel <- getState
+    let (Rel st) = rel
+    setState (Rel $ st ++ [(User "NSA", User "Military")])
 
 
-replaying :: SLIO User Rel (Rep) String
-replaying = do
-  file1 <- label (User "NSA") "secret"
-  --file2 <- label (User "NSA") "secret 2"
-  --file  <- unlabelReplaying file1 [User "Another"]
-  file  <- unlabelReplaying file1 [User "Military"] -- what if instead of file1 this is file2 ??
-  --lst <- getReplaying
+leak :: SLIO User Rel Rep Integer
+leak = do
+  file1 <- label (User "NSA") 0
+  r <- newLIORef (User "Another") 1
+
   --file  <- unlabel file1
-  --mil   <- newLIORef (User "Another") file
-  --writeLIORef mil ""
-  disallowNM
-  mil   <- newLIORef (User "Another") $ file++"A"
-  --writeLIORef mil file
-  readLIORef mil
+  --mil   <- newLIORef (User "Military") file
+  --writeLIORef mil 1
 
--- ______________________
--- This example shows why using relable is not the correct solution
+  _ <- toLabeled (User "NSA") ( do
+    file  <- unlabelReplaying file1 [User "Military"]
+    --disallowNM
+    when (file==0) (do
+      allowMB
+      writeLIORef r 0))
+  readLIORef r
 
-unlabelAsReplaying
-  :: (Label l st r, Replaying r l st) => Labeled l a -> l -> SLIO l st r a
-unlabelAsReplaying ldata nl = do
-  d <- relabel ldata nl
-  unlabel d
 
-replaying2 :: SLIO User Rel (Rep) String
-replaying2 = do
-  file <- label (User "NSA") "secret"
-  file <- unlabelAsReplaying file (User "Military") --wrong
-  --file <- unlabel file
-  mil  <- newLIORef (User "Military") file
-  an   <- newLIORef (User "Another") file
+reptt :: SLIO User Rel (Rep) String
+reptt = do
+  file1 <- label (User "NSA") "secret"
+  -- file2 <- label (User "NSA") "secret"
+  --ff <- unlabel file2
+  --file  <- unlabelReplaying file1 [User "Another"]
+  file  <- unlabelReplaying file1 [User "Military"]
+  --file  <- unlabel file1
+  mil   <- newLIORef (User "Military") file
   writeLIORef mil ""
-  --disallowNM
-  writeLIORef mil file
-  readLIORef mil
--- ______________________
+  disallowNM
+  traceShow "allow mb" allowMB
+  f <- label (User "Another") file
+  return file
+
+
 
 main :: IO ()
 main = do
-  (r, s) <- unSLIO replaying initState
+  (r, s) <- unSLIO leak initState
   print r
   print s

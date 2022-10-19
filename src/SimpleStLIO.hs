@@ -1,11 +1,12 @@
-{-# LANGUAGE MultiParamTypeClasses, TupleSections #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeOperators #-}
+
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DatatypeContexts #-}
 {-# LANGUAGE FlexibleContexts #-}
 module SimpleStLIO
        (SLIO(..), Labeled,  LIORef, Label(..), LIOState(..), Replaying(..),
@@ -35,18 +36,20 @@ import Text.ParserCombinators.ReadPrec (reset)
 -- the bool in rlab tracks the fact that a global unlabel has been done
 -- the guard has to check that any info in the computation (unlabeled) can flow to the label 
 -- we can replay information only if there wasnt any global unlabeling or if all of the replaying (all the ids from 0 to current) can flow to the label
-data  (Label l st, Replaying r l st, Show (r l)) => LIOState l st r= LIOState { lcurr :: [l], scurr :: st, ntlab :: [l], rlab:: Map String (Int, [Int], [r l])}--, ids :: Map String Int }
+data  (Label l st r, Replaying r l st, Show (r l)) => LIOState l st r= LIOState { lcurr :: [l], scurr :: st, ntlab :: [l], rlab:: Map String (Int, [Int], [r l])}--, ids :: Map String Int }
   deriving (Show)
 
 
 
 --data FlowTo l = FlowTo l l
+data R l l1 = Rep Int l l1
+  deriving (Eq, Show)
 
-class (Eq (r l), Show (r  l), Label l st) => Replaying r l st | r l -> st where
+class (Eq (r l), Show (r  l)) => Replaying r l st | r l -> st where
   -- TODO : use id info
   create :: l -> l -> Int -> [r l]
   checkR :: Map String (Int, [Int], [r l]) -> l -> l -> Bool
-  -- inject :: (Label l st) => [r l] -> st -> st
+  -- inject :: (Label l st r) => [r l] -> st -> st
   -- intersection :: [r l] -> [r l] -> [r l]
 
 -- class (Eq (f l), Eq l) => FlowTo f l where
@@ -74,13 +77,12 @@ instance Applicative (SLIO l st r) where
   pure = return
   (<*>) = ap
 
-class (Eq l, Show l) => Label l st where
+class (Eq l, Show l, Replaying r l st) => Label l st r where
   -- check to ensure that l1 lis less restricrtive than l2 in s
-  lrt :: Replaying r l st => st -> [l] -> Map String (Int, [Int], [r l]) -> l -> l -> Bool
+  lrt :: st -> [l] -> Map String (Int, [Int], [r l]) -> l -> l -> Bool
 
-  -- TODO: what about incupperset and replaying?
   -- to avoid to conditional allow a flow
-  incUpperSet :: Replaying r l st => st -> st -> [l] -> Map String (Int, [Int], [r l]) -> l -> Bool
+  incUpperSet :: st -> st -> [l] -> Map String (Int, [Int], [r l]) -> l -> Bool
 
 data Labeled l a  = Lb l a Int| NTLb l a Int
              deriving (Eq, Show)
@@ -92,53 +94,53 @@ lioError s = fail s
 
 -- internal primitives
 
-getLabel :: (Replaying r l st,Label l st) => SLIO l st r [l]
+getLabel :: (Replaying r l st,Label l st r) => SLIO l st r [l]
 getLabel = SLIO (\s -> return (lcurr s, s))
 
-getState ::  (Replaying r  l st,Label l st)=> SLIO l st r st
+getState ::  (Replaying r  l st,Label l st r)=> SLIO l st r st
 getState = SLIO (\s -> return (scurr s, s))
 
-getReplaying :: (Label l st, Replaying r  l st) => SLIO l st r (Map String (Int, [Int], [r l]))
+getReplaying :: (Label l st r, Replaying r  l st) => SLIO l st r (Map String (Int, [Int], [r l]))
 getReplaying = SLIO (\s -> return (rlab s, s))
 
--- getReplaying ::  Label l st => SLIO l st r (Map String (Int, [(,) Int l]))
+-- getReplaying ::  Label l st r => SLIO l st r (Map String (Int, [(,) Int l]))
 -- getReplaying = SLIO (\s -> return (rlab ids s, s))
 
-setState ::  (Replaying r  l st,Label l st) => st -> SLIO l st r ()
+setState ::  (Replaying r  l st,Label l st r) => st -> SLIO l st r ()
 setState st = SLIO (\(LIOState lcurr scurr ntlab rlab ) ->
                       do when (any (incUpperSet scurr st lcurr rlab ) lcurr) (lioError "incUpperClosure check failed")
                          return ((), LIOState lcurr st ntlab rlab ))
 
 
-check :: (Replaying r l st)  => st -> [l] -> Map String (Int, [Int], [r l]) -> l -> Bool
+check :: (Label l st r)  => st -> [l] -> Map String (Int, [Int], [r l]) -> l -> Bool
 check scurr lcurr rlab l = and [ lrt scurr lcurr rlab x l | x <- lcurr ]
 
-guard ::  (Replaying r  l st,Label l st) => l -> SLIO l st r ()
+guard ::  (Replaying r  l st,Label l st r) => l -> SLIO l st r ()
 guard l = do lcurr <- getLabel
              scurr <- getState
              rlab <- getReplaying
              let checkPassed = check scurr lcurr rlab l
              unless checkPassed (lioError "label check failed")
 
-io ::  Label l st => IO a -> SLIO l st r a
+io ::  Label l st r => IO a -> SLIO l st r a
 io m = SLIO (\s -> fmap (,s) m)
 
 -- exported functions
 
-label ::  (Replaying r  l st,Label l st)=> l -> a -> SLIO l st r (Labeled l a)
+label ::  (Replaying r  l st,Label l st r)=> l -> a -> SLIO l st r (Labeled l a)
 label l x = do
   guard l
   i <- getNewId l
   return (Lb l x i)
 
 -- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
-labelNT ::  (Replaying r  l st,Label l st) => l -> a -> SLIO l st r (Labeled l a)
+labelNT ::  (Replaying r  l st,Label l st r) => l -> a -> SLIO l st r (Labeled l a)
 labelNT l x = do
   guard l
   i <- getNewId l
   return (NTLb l x i)
 
-getNewId :: (Replaying r  l st,Label l st) => l -> SLIO l st r Int
+getNewId :: (Replaying r  l st,Label l st r) => l -> SLIO l st r Int
 getNewId l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
   let k = show l in
     case Data.Map.lookup (show l) rlab of
@@ -146,13 +148,13 @@ getNewId l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
         Just (n, b, l) -> return (n, LIOState lcurr scurr ntlab $ Data.Map.insert k (n+1, b, l) rlab)
   )
 
--- labelR :: (Label l st) => l -> a -> SLIO l st (Labeled l a)
+-- labelR :: (Label l st r) => l -> a -> SLIO l st (Labeled l a)
 -- labelR l x= do
 --               guard l
 --               i <- createLabel l
 --               return (RLb l x i)
 
--- createLabel :: (Label l st) => l -> SLIO l st r Int
+-- createLabel :: (Label l st r) => l -> SLIO l st r Int
 -- createLabel l= SLIO (\(LIOState lcurr scurr ntlab rlab ids) ->
 --   let insert n lst=Data.Map.insert (show l) (n,lst) rlab ids
 --     in
@@ -164,14 +166,14 @@ getNewId l= SLIO (\(LIOState lcurr scurr ntlab rlab) ->
     --insert n [] lcurr=Data.Map.insert (show l) (n,createFlows (n) lcurr) 
     --insert n lst lcurr=Data.Map.insert (show l) (n, lst ++ createFlows (n) lcurr)
 
--- resetReplaying :: (Label l st, Replaying r Int l st) => l -> SLIO l st r ()
+-- resetReplaying :: (Label l st r, Replaying r Int l st) => l -> SLIO l st r ()
 -- resetReplaying l = SLIO (\(LIOState lcurr scurr ntlab rlab ids ) ->
 --             let toReset (x:xs) = create l x ++ toReset xs
 --                 toReset [] = []  in
 --             return ((), LIOState lcurr scurr ntlab (rlab  \\ traceShow ("reset" ++ show (toReset lcurr)) toReset lcurr) ids))
 
 
-nonReplaying :: (Replaying r l st, Show a) => a -> Int -> SLIO l st r ()
+nonReplaying :: (Label l st r, Show a) => a -> Int -> SLIO l st r ()
 nonReplaying l id= --TODO: use id??
   let k= show l in
   SLIO (\(LIOState lcurr scurr ntlab rlab) ->
@@ -182,7 +184,7 @@ nonReplaying l id= --TODO: use id??
     )
 
 -- TODO: set true in rlab
-unlabel ::  (Replaying r  l st,Label l st) => Labeled l a -> SLIO l st r a
+unlabel ::  (Replaying r  l st,Label l st r) => Labeled l a -> SLIO l st r a
 unlabel (Lb l x i) = nonReplaying l i >> unlabelInternal l x --resetReplaying l >> return x
 unlabel (NTLb l x i)= taintNT l >> nonReplaying l i>> unlabelInternal l x--resetReplaying l >> return x
 
@@ -193,7 +195,7 @@ valueOf(Lb l x i) = x
 valueOf(NTLb l x i) = x
 
 
-unlabelReplaying :: (Replaying r  l st,Label l st) => Labeled l a -> [l] -> SLIO l st r a
+unlabelReplaying :: (Replaying r  l st,Label l st r) => Labeled l a -> [l] -> SLIO l st r a
 unlabelReplaying ld ls =
   let
     l = labelOf ld
@@ -202,25 +204,25 @@ unlabelReplaying ld ls =
     rls (x:xs)= create l x i ++ rls xs
     rls []=[] in
     checkFlow l ls >> taintR l (rls ls) >> unlabel ld
--- taintAll :: Label l st => [l] -> SLIO l st r ()
+-- taintAll :: Label l st r => [l] -> SLIO l st r ()
 -- taintAll = foldr ((>>) . taint) (return ())
 
 -- to check that when replaying the flow is allowed (replaying flow) 
 -- NOTE: you cannot say to replay a not existing flow
-checkFlow :: (Replaying r  l st,Label l st) => l -> [l] -> SLIO l st r ()
+checkFlow :: (Replaying r  l st,Label l st r) => l -> [l] -> SLIO l st r ()
 checkFlow l ls=do
   scurr <- getState
   rlab <- getReplaying
   let checkPassed = all (check scurr [l] rlab) ls
   unless checkPassed (lioError "check flow while replaying failed")
 
--- unlabelAsReplaying :: Label l st => Labeled l b -> [l] -> SLIO l st r b
+-- unlabelAsReplaying :: Label l st r => Labeled l b -> [l] -> SLIO l st r b
 -- unlabelAsReplaying ldata lst@(x:xs)=do
 --   taintAll xs
 --   d <- relabel ldata x
 --   unlabel d
 
-taintR :: (Replaying r  l st, Label l st) => l -> [r  l] -> SLIO l st r ()
+taintR :: (Replaying r  l st, Label l st r) => l -> [r  l] -> SLIO l st r ()
 taintR l ls = SLIO (\(LIOState lcurr scurr ntlab rlab) ->
   let k = show l in
   case Data.Map.lookup k rlab of
@@ -235,10 +237,10 @@ taintR l ls = SLIO (\(LIOState lcurr scurr ntlab rlab) ->
 -- unlabelR (NTLb l x) rsinks= taintR l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab ids)
 -- unlabelR (Lb l x) rsinks= taintR l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab ids)
 
-taint ::  (Replaying r  l st,Label l st) => l -> SLIO l st r ()
+taint ::  (Replaying r  l st,Label l st r) => l -> SLIO l st r ()
 taint l = SLIO (\(LIOState lcurr scurr ntlab rlab) -> return ((), LIOState (nub (l : lcurr)) scurr ntlab rlab))
 
-taintNT ::  (Replaying r  l st,Label l st)=> l -> SLIO l st r ()
+taintNT ::  (Replaying r  l st,Label l st r)=> l -> SLIO l st r ()
 taintNT l = SLIO (\(LIOState lcurr scurr ntlab rlab) -> return ((), LIOState lcurr scurr (nub (l : ntlab)) rlab))
 
 -- taintR :: (Eq l, Show l) => l -> [l] -> SLIO l st r (Map String (Int, [(Int, l)]))
@@ -251,7 +253,7 @@ taintNT l = SLIO (\(LIOState lcurr scurr ntlab rlab) -> return ((), LIOState lcu
 --       --Nothing -> let nrlab ids = (insert 1 $ createFlows 1) in return (1 , LIOState lcurr scurr ntlab  nrlab)
 --   )
 
--- unlabelT :: Label l st => TransientLabeled l a -> SLIO l st a
+-- unlabelT :: Label l st r => TransientLabeled l a -> SLIO l st a
 -- unlabelT (TLb l x) = taint l >> taintT l >> return x
 
 
@@ -263,19 +265,19 @@ idOf :: Labeled l a -> Int
 idOf (Lb l x i) = i
 idOf (NTLb l x i)=i
 
-relabel ::  (Replaying r  l st,Label l st) => Labeled l a -> l -> SLIO l st r (Labeled l a)
+relabel ::  (Replaying r  l st,Label l st r) => Labeled l a -> l -> SLIO l st r (Labeled l a)
 relabel lblVal lbl = toLabeled lbl (unlabel lblVal)
 
-newLIORef ::  (Replaying r  l st,Label l st) => l -> a -> SLIO l st r (LIORef l a)
+newLIORef ::  (Replaying r  l st,Label l st r) => l -> a -> SLIO l st r (LIORef l a)
 newLIORef l x = do guard l
                    ref <- io $ newIORef x
                    return (LIORef l ref)
 
-readLIORef ::  (Replaying r  l st,Label l st) => LIORef l a -> SLIO l st r a
+readLIORef ::  (Replaying r  l st,Label l st r) => LIORef l a -> SLIO l st r a
 readLIORef (LIORef l ref) = do taint l
                                io (readIORef ref)
 
-writeLIORef ::  (Replaying r  l st,Label l st) => LIORef l a -> a -> SLIO l st r ()
+writeLIORef ::  (Replaying r  l st,Label l st r) => LIORef l a -> a -> SLIO l st r ()
 writeLIORef (LIORef l ref) v = do guard l
                                   io (writeIORef ref v)
 
@@ -283,7 +285,7 @@ labelOfRef :: LIORef l a -> l
 labelOfRef (LIORef l ref) = l
 
 -- what about replaying in a toLabekled???
-toLabeled ::  (Replaying r  l st,Label l st) => l -> SLIO l st r a -> SLIO l st r (Labeled l a)
+toLabeled ::  (Replaying r  l st,Label l st r) => l -> SLIO l st r a -> SLIO l st r (Labeled l a)
 toLabeled l m = SLIO (\s ->
                  let LIOState ll ss tt rr=  s in
                   traceShow ll $
