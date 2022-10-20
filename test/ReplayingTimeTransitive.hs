@@ -63,8 +63,7 @@ instance Label User Rel (Rep) where
           rlab
         $ groupBy (\(Rep i l1 l2) (Rep ii ll1 ll2) -> l1 == ll1)
         rtr
-    rtr = transClosure s
-        $ concatMap (\(_, _, l) -> l) (Data.Map.elems rlab)
+    rtr = transClosure s $ concatMap (\(_, _, l) -> l) (Data.Map.elems rlab)
     transClosure st rlab =
       -- Perform one step of transitive closure, i.e. if we have both (e1,e2) and
       -- (e2,e3), add (e1,e3).
@@ -127,32 +126,14 @@ leak = do
   --file  <- unlabel file1
   --mil   <- newLIORef (User "Military") file
   --writeLIORef mil 1
-
   _ <- toLabeled (User "NSA") ( do
+    
     file  <- unlabelReplaying file1 [User "Military"]
     --disallowNM
     when (file==0) (do
       allowMB
       writeLIORef r 0))
   readLIORef r
-
-
-reptt :: SLIO User Rel (Rep) String
-reptt = do
-  file1 <- label (User "NSA") "secret"
-  -- file2 <- label (User "NSA") "secret"
-  --ff <- unlabel file2
-  --file  <- unlabelReplaying file1 [User "Another"]
-  file  <- unlabelReplaying file1 [User "Military"]
-  --file  <- unlabel file1
-  mil   <- newLIORef (User "Military") file
-  writeLIORef mil ""
-  disallowNM
-  traceShow "allow mb" allowMB
-  f <- label (User "Another") file
-  return file
-
-
 
 main :: IO ()
 main = do
