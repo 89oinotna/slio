@@ -33,13 +33,15 @@ data Rep l = Rep Int l l
   deriving (Eq, Show)
 
 instance Replaying (Rep) User Rel where
+  rid (Rep id l1 l2) =id
+  trg (Rep _ _ l2) = l2
   create src trg i = [Rep i src trg]
   checkR rlab l1 l2 = case Data.Map.lookup (show l1) rlab of
     Nothing          -> False
     Just (_, lbs, l) -> sum lbs == s --(filter (\x -> any (\(Rep ii _ _) -> ii == x) l) [0 .. i - 1]) filter out only those that are relabeled as replaying
      where
       s = foldr
-        (\(Rep i _ ll2) acc -> if ll2 == l2 then (if acc == (-1) then i else acc + i) else acc)
+        (\(Rep i _ ll2, b) acc -> if b && ll2 == l2 then (if acc == (-1) then i else acc + i) else acc)
         (-1) -- to avoid problems with 0 when the sum if there is nothing is still 0
         l -- this assumes that there is only one unique for each id to ll2
 
@@ -50,28 +52,29 @@ instance Label User Rel (Rep) where
   lrt (Rel st) lcurr rlab lbl1 lbl2 =
     (traceShow (show s ++ "nrlab:" ++ show nrlab) (lbl1, lbl2) `elem` s) ||
      --  check that for each id the replaying is allowed
-                                             checkR nrlab lbl1 lbl2 
+                                             checkR nrlab lbl1 lbl2
    where
     r = refl $ lbl1:lbl2:lcurr -- TODO: find an example where is useful that lbl1 and lbl2 are inserted there
     --Rel rst = inject rlab st
     s = reflTransClosure $ nub (st ++ r)
+    rtr = transClosure s
+        $ concatMap (\(_, _, l) -> l) (Data.Map.elems rlab)
+    transClosure st rlab =
+      --let rlab = filter snd rlab in
+      -- Perform one step of transitive closure, i.e. if we have both (e1,e2) and
+      -- (e2,e3), add (e1,e3).
+      let nxs = nub $  rlab ++ [ (Rep i l1 e2, True) | (e1, e2)      <- st , (Rep i l1 l2, True) <- rlab , l2 == e1 ]
+      -- If we found new relations we need to look for more recursively, otherwise
+      -- we are done.
+      in  if length rlab == length nxs then nxs else transClosure st nxs
     nrlab = foldr
-          (\rels@((Rep _ l1 _) : _) acc ->
+          (\rels@((Rep _ l1 _, _) : _) acc ->
             case Data.Map.lookup (show l1) acc of
               Just (i, lst, _) -> Data.Map.insert (show l1) (i, lst, rels) acc
           )
           rlab
-        $ groupBy (\(Rep i l1 l2) (Rep ii ll1 ll2) -> l1 == ll1)
+        $ groupBy (\(Rep i l1 l2, _) (Rep ii ll1 ll2, _) -> l1 == ll1)
         rtr
-    rtr = transClosure s
-        $ concatMap (\(_, _, l) -> l) (Data.Map.elems rlab)
-    transClosure st rlab =
-      -- Perform one step of transitive closure, i.e. if we have both (e1,e2) and
-      -- (e2,e3), add (e1,e3).
-      let nxs = nub $  rlab ++ [ Rep i l1 e2 | (e1, e2)      <- st , (Rep i l1 l2) <- rlab , l2 == e1 ]
-      -- If we found new relations we need to look for more recursively, otherwise
-      -- we are done.
-      in  if length rlab == length nxs then nxs else transClosure st nxs
 
 
 
@@ -111,10 +114,12 @@ replaying = do
   file  <- unlabelReplaying file1 [User "Military"] -- what if instead of file1 this is file2 ??
   --lst <- getReplaying
   --file  <- unlabel file1
-  --mil   <- newLIORef (User "Another") file
+  mil   <- newLIORef (User "Military") file
   --writeLIORef mil ""
   disallowNM
-  mil   <- newLIORef (User "Another") $ file++"A"
+  writeLIORef mil ""
+  --mil   <- newLIORef (User "Military") file
+  -- mil   <- newLIORef (User "Another") $ file++"A"
   --writeLIORef mil file
   readLIORef mil
 
