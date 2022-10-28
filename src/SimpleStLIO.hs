@@ -223,8 +223,8 @@ getNewId l = SLIO
 --             return ((), LIOState lcurr scurr ntlab (rlab  \\ traceShow ("reset" ++ show (toReset lcurr)) toReset lcurr) ids))
 
 
-taintRepIds :: (Label l st r, Show a) => a -> Int -> SLIO l st r ()
-taintRepIds l id = --TODO: use id??
+trackIdUnlabel :: (Label l st r, Show a) => a -> Int -> SLIO l st r ()
+trackIdUnlabel l id = --TODO: use id??
   let k = show l
   in  SLIO
         (\(LIOState lcurr scurr ntlab rlab) ->
@@ -236,7 +236,7 @@ taintRepIds l id = --TODO: use id??
 
 -- TODO: set true in rlab
 unlabel :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
-unlabel (Lb   l x i) = taintRepIds l i >> unlabelInternal l x --resetReplaying l >> return x
+unlabel (Lb   l x i) = trackIdUnlabel l i >> unlabelInternal l x --resetReplaying l >> return x
 
 -- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
 unlabelNT :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
