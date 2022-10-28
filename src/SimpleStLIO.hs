@@ -28,7 +28,7 @@ module SimpleStLIO
   , readLIORef
   , labelOfRef
   , toLabeled
-  , labelNT
+  -- , labelNT
   , unlabelReplaying
   , getReplaying
   )--, unlabelR)--, sfmap)
@@ -42,19 +42,15 @@ import           Control.Applicative
 import           Control.Monad.Fail             ( MonadFail(..) )
 import           Prelude                 hiding ( fail )
 
-import           Control.Monad           hiding ( guard )
-import           Data.IORef
-import           Data.List
+import Control.Monad ( MonadFail(fail), ap, liftM, unless, when )
+import Data.IORef ( newIORef, readIORef, writeIORef, IORef )
+import Data.List ( nub )
 import           Data.Map                       ( Map
                                                 , empty
                                                 , insert
                                                 , lookup
                                                 )
-import           Data.Maybe                     ( Maybe )
-import           Data.Type.Equality
 import           Debug.Trace                    ( traceShow )
-import           Text.ParserCombinators.ReadPrec
-                                                ( reset )
 
 -- the bool in rlab tracks the fact that a global unlabel has been done
 -- the guard has to check that any info in the computation (unlabeled) can flow to the label 
@@ -114,11 +110,12 @@ class (Eq l, Show l, Replaying r l st) => Label l st r where
   -- to avoid to conditional allow a flow
   incUpperSet :: st -> st -> [l] -> Map String (Int, [Int], [(r l, Bool)]) -> l -> Bool
 
-data Labeled l a  = Lb l a Int| NTLb l a Int
+data Labeled l a  = Lb l a Int
              deriving (Eq, Show)
 
+data LIORef l a = LIORef l (IORef a) Int
 
-data LIORef l a = LIORef l (IORef a)
+-- class LV a where
 
 lioError s = fail s
 
@@ -177,14 +174,14 @@ label l x = do
   i <- getNewId l
   return (Lb l x i)
 
--- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
-labelNT
-  :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
-labelNT l x = do
-  guard l
-  taintRepRel l
-  i <- getNewId l
-  return (NTLb l x i)
+
+-- labelNT
+--   :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
+-- labelNT l x = do
+--   guard l
+--   activateRepRel l
+--   i <- getNewId l
+--   return (NTLb l x i)
 
 getNewId :: (Replaying r l st, Label l st r) => l -> SLIO l st r Int
 getNewId l = SLIO
@@ -240,13 +237,16 @@ taintRepIds l id = --TODO: use id??
 -- TODO: set true in rlab
 unlabel :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
 unlabel (Lb   l x i) = taintRepIds l i >> unlabelInternal l x --resetReplaying l >> return x
-unlabel (NTLb l x i) = taintNT l >> taintRepIds l i >> unlabelInternal l x--resetReplaying l >> return x
+
+-- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
+unlabelNT :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
+unlabelNT (Lb l x i) = taintNT l >> trackIdUnlabel l i >> unlabelInternal l x--resetReplaying l >> return x
 
 unlabelInternal l x = taint l >> return x
 
 valueOf :: Labeled l a -> a
 valueOf (Lb   l x i) = x
-valueOf (NTLb l x i) = x
+-- valueOf (NTLb l x i) = x
 
 
 unlabelReplaying
@@ -317,10 +317,6 @@ taintRepRel lab= SLIO
 
 
 
--- unlabelR :: (Eq l,Show l) => Labeled l b -> [l] -> SLIO l st r b
--- --unlabelR (Lb l x) rsinks= promiseRepRel l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab ids)
--- unlabelR (NTLb l x) rsinks= promiseRepRel l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab ids)
--- unlabelR (Lb l x) rsinks= promiseRepRel l rsinks >> return x -- not tainting lcurr (but in the guard for label then one needs to check also in rlab ids)
 
 taint :: (Replaying r l st, Label l st r) => l -> SLIO l st r ()
 taint l = SLIO
@@ -350,11 +346,11 @@ taintNT l = SLIO
 
 labelOf :: Labeled l a -> l
 labelOf (Lb   l x _) = l
-labelOf (NTLb l x _) = l
+-- labelOf (NTLb l x _) = l
 
 idOf :: Labeled l a -> Int
 idOf (Lb   l x i) = i
-idOf (NTLb l x i) = i
+-- idOf (NTLb l x i) = i
 
 relabel
   :: (Replaying r l st, Label l st r)
@@ -369,22 +365,23 @@ newLIORef l x = do
   guard l
   taintRepRel l
   ref <- io $ newIORef x
-  return (LIORef l ref)
+  i <- getNewId l
+  return (LIORef l ref i)
 
 readLIORef :: (Replaying r l st, Label l st r) => LIORef l a -> SLIO l st r a
-readLIORef (LIORef l ref) = do
+readLIORef (LIORef l ref i) = do
   taint l
   io (readIORef ref)
 
 writeLIORef
   :: (Replaying r l st, Label l st r) => LIORef l a -> a -> SLIO l st r ()
-writeLIORef (LIORef l ref) v = do
+writeLIORef (LIORef l ref i) v = do
   guard l
   taintRepRel l
   io (writeIORef ref v)
 
 labelOfRef :: LIORef l a -> l
-labelOfRef (LIORef l ref) = l
+labelOfRef (LIORef l ref i) = l
 
 -- what about replaying in a toLabekled???
 toLabeled
@@ -394,9 +391,8 @@ toLabeled
   -> SLIO l st r (Labeled l a)
 toLabeled l m =
   SLIO
-      (\s ->
-        let LIOState ll ss tt rr = s
-        in  traceShow ll $ do
+      (\s@(LIOState ll ss tt rr) ->
+        traceShow ll $ do
               (x, LIOState lcurr scurr ntlab rlab) <- unSLIO m s
               let checkPassed = traceShow ("lcurr:" ++ show lcurr)
                     $ check scurr lcurr rr l
