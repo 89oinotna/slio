@@ -32,7 +32,7 @@ module SimpleStLIO
   , unlabelReplaying
   , getReplaying
   , asNT
-  , asReplaying
+  , asRP
   )--, unlabelR)--, sfmap)
     where
 
@@ -179,6 +179,8 @@ io :: Label l st r => IO a -> SLIO l st r a
 io m = SLIO (\s -> fmap (, s) m)
 
 -- exported functions
+
+-- Used to check if allowing the replay is causing an increaseUpperSet
 checkAndRep ::(Replaying r l st, Label l st r) => l -> SLIO l st r ()
 checkAndRep l=  SLIO (\s@(LIOState lcurr scurr ntlab rlab newid) -> do
     (_, LIOState _ _ _ rlab' _) <- unSLIO (replayTo l) s
@@ -275,8 +277,8 @@ asNT f ld@(Lb l a i) = do
   taintNT l i
   f ld
 
-asReplaying :: (Replaying r l st, Label l st r) => [l] -> (Labeled l a -> SLIO l st r a)-> Labeled l a -> SLIO l st r a
-asReplaying lst f ld@(Lb l a i)= do
+asRP :: (Replaying r l st, Label l st r) => (Labeled l a -> SLIO l st r a)->[l] -> Labeled l a -> SLIO l st r a
+asRP f lst ld@(Lb l a i)= do
   addPromises l i lst
   f ld
 
@@ -419,7 +421,7 @@ writeLIORef (LIORef l ref i) v = do
 labelOfRef :: LIORef l a -> l
 labelOfRef (LIORef l ref i) = l
 
--- what about replaying in a toLabekled???
+-- what about replaying state in a toLabekled???
 toLabeled
   :: (Replaying r l st, Label l st r)
   => l
