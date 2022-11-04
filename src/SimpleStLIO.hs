@@ -64,7 +64,7 @@ data  LIOState l st r = LIOState
   { lcurr :: HM.HashMap l [Int]
   , scurr :: st
   , ntlab :: HM.HashMap l [Int]
-  , rlab  :: r l
+  , rlab  :: r
   , newid :: Int
   }--, ids :: Map String Int }
   deriving Show
@@ -72,10 +72,10 @@ data  LIOState l st r = LIOState
 
 
 --data FlowTo l = FlowTo l l
-data R l l1 = Rep Int l l1
-  deriving (Eq, Show)
+-- data R l l1 = Rep Int l l1
+--   deriving (Eq, Show)
 
-class (Show (r  l), Label l st r) => Replaying r l st | r l -> st where
+class (Show (r), Label l st r) => Replaying r l st | r l-> st where
   -- TODO : use id info
   -- getNewId ::  l -> SLIO l st r Int
 
@@ -87,7 +87,7 @@ class (Show (r  l), Label l st r) => Replaying r l st | r l -> st where
 
 
   --create :: l -> l -> Int -> [r l]
-  --checkR :: r l -> l -> l -> Bool
+  --checkR :: r -> l -> l -> Bool
   -- inject :: (Label l st r) => [(r l, Bool)] -> st -> st
   -- intersection :: [(r l, Bool)] -> [r l] -> [r l]
 
@@ -118,10 +118,10 @@ instance Applicative (SLIO l st r) where
 
 class (Eq l, Show l, Hashable l) => Label l st r where
   -- check to ensure that l1 lis less restricrtive than l2 in s
-  lrt :: st -> HM.HashMap l [Int] -> r l -> l -> l -> Bool
+  lrt :: st -> HM.HashMap l [Int] -> r -> l -> l -> Bool
 
   -- to avoid to conditional allow a flow
-  incUpperSet :: st -> st -> HM.HashMap l [Int] -> r l -> r l -> l -> Bool
+  incUpperSet :: st -> st -> HM.HashMap l [Int] -> r -> r -> l -> Bool
 
 data Labeled l a  = Lb l a Int
              deriving (Eq, Show)
@@ -143,7 +143,7 @@ getState = SLIO (\s -> return (scurr s, s))
 
 getReplaying
   :: (Label l st r, Replaying r l st)
-  => SLIO l st r (r l)
+  => SLIO l st r r
 getReplaying = SLIO (\s -> return (rlab s, s))
 
 -- getReplaying ::  Label l st r => SLIO l st r (Map String (Int, [(,) Int l]))
@@ -162,7 +162,7 @@ check
   :: (Label l st r)
   => st
   -> HM.HashMap l [Int]
-  -> r l
+  -> r
   -> l
   -> Bool
 check scurr lcurr rlab l = and [ lrt scurr lcurr rlab x l | x <- HM.keys lcurr ]

@@ -37,7 +37,7 @@ newtype Rel = Rel [(User, User)] deriving (Show )
 --   deriving (Eq, Show)
 
 -- newtype Rep l= Rep (HM.HashMap (l, Int) [(l, Bool)]) -- to which labels is replaying
-newtype Rep l= Rep (HM.HashMap l [(l, Int, l, Bool)]) deriving (Show) -- to which labels is replaying
+newtype Rep= Rep (HM.HashMap User [(User, Int, User, Bool)]) deriving (Show) -- to which labels is replaying
 
 insert :: (Hashable k, Eq a, Eq k) => HM.HashMap k [a] -> k -> [a] -> HM.HashMap k [a]
 insert m k v = case HM.lookup k m of
