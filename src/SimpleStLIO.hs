@@ -9,6 +9,7 @@
 {-# LANGUAGE DatatypeContexts #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# LANGUAGE InstanceSigs #-}
 module SimpleStLIO
   ( SLIO(..)
   , Labeled
@@ -29,7 +30,6 @@ module SimpleStLIO
   , labelOfRef
   , toLabeled
   -- , labelNT
-  , unlabelReplaying
   , getReplaying
   , asNT
   , asRP
@@ -39,7 +39,7 @@ module SimpleStLIO
 
 
 import           Control.Applicative
-
+import Data.Biapplicative
 
 import           Control.Monad.Fail             ( MonadFail(..) )
 import           Prelude                 hiding ( fail )
@@ -83,20 +83,9 @@ class (Show (r), Label l st r) => Replaying r l st | r l-> st where
 
   addPromises :: l -> Int -> [l] -> SLIO l st r ()
 
-  replayTo :: l -> SLIO l st r ()
+  enablePromises :: l -> SLIO l st r ()
 
 
-  --create :: l -> l -> Int -> [r l]
-  --checkR :: r -> l -> l -> Bool
-  -- inject :: (Label l st r) => [(r l, Bool)] -> st -> st
-  -- intersection :: [(r l, Bool)] -> [r l] -> [r l]
-
--- class (Eq (f l), Eq l) => FlowTo f l where
---   source :: f l -> l
---   target :: f l -> l
-
---instance FlowTo f a => Diff [] [] (f a) where
-  --difference l1 l2= l1 \\ l2
 
 newtype SLIO l st r a= SLIO { unSLIO :: LIOState l st r  -> IO (a, LIOState l st r ) }
 
@@ -123,13 +112,15 @@ class (Eq l, Show l, Hashable l) => Label l st r where
   -- to avoid to conditional allow a flow
   incUpperSet :: st -> st -> HM.HashMap l [Int] -> r -> r -> l -> Bool
 
+newtype LV l a = LV (Either (Labeled l a) (LIORef l a))
+
 data Labeled l a  = Lb l a Int
              deriving (Eq, Show)
 
 data LIORef l a = LIORef l (IORef a) Int
 
 
--- class LV a where
+
 
 lioError s = fail s
 
@@ -158,13 +149,7 @@ setState st = SLIO
   )
 
 
-check
-  :: (Label l st r)
-  => st
-  -> HM.HashMap l [Int]
-  -> r
-  -> l
-  -> Bool
+check :: (Label l st r) => st -> HM.HashMap l [Int] -> r -> l -> Bool
 check scurr lcurr rlab l = and [ lrt scurr lcurr rlab x l | x <- HM.keys lcurr ]
 
 guard :: (Replaying r l st, Label l st r) => l -> SLIO l st r ()
@@ -178,43 +163,27 @@ guard l = do
 io :: Label l st r => IO a -> SLIO l st r a
 io m = SLIO (\s -> fmap (, s) m)
 
--- exported functions
 
 -- Used to check if allowing the replay is causing an increaseUpperSet
 checkAndRep ::(Replaying r l st, Label l st r) => l -> SLIO l st r ()
 checkAndRep l=  SLIO (\s@(LIOState lcurr scurr ntlab rlab newid) -> do
-    (_, LIOState _ _ _ rlab' _) <- unSLIO (replayTo l) s
+    (_, LIOState _ _ _ rlab' _) <- unSLIO (enablePromises l) s
     when (any (incUpperSet scurr scurr lcurr rlab rlab') $ HM.keys lcurr)
          (lioError "incUpperClosure check failed")
     return ((), LIOState lcurr scurr ntlab rlab' newid)
   )
 
-label
-  :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
+-- exported functions
+
+label :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
 label l x = do
   guard l
   checkAndRep l
-  --replayTo l
   Lb l x <$> getNewId
-
-
--- labelNT
---   :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
--- labelNT l x = do
---   guard l
---   activateRepRel l
---   i <- getNewId l
---   return (NTLb l x i)
 
 getNewId :: (Replaying r l st, Label l st r) => SLIO l st r Int
 getNewId = SLIO
   (\(LIOState lcurr scurr ntlab rlab newid) ->
-    -- let k = show l
-    -- in
-    --   case HM.lookup (show l) rlab of
-    --     Nothing -> return
-    --       (0, LIOState lcurr scurr ntlab $ HM.insert k (1, [], []) rlab)
-    --     Just (n, b, l) ->
           return
             ( newid
             --, LIOState lcurr scurr ntlab $ HM.insert k (n + 1, b, l) rlab
@@ -222,131 +191,38 @@ getNewId = SLIO
             )
   )
 
--- labelR :: (Label l st r) => l -> a -> SLIO l st (Labeled l a)
--- labelR l x= do
---               guard l
---               i <- createLabel l
---               return (RLb l x i)
-
--- createLabel :: (Label l st r) => l -> SLIO l st r Int
--- createLabel l= SLIO (\(LIOState lcurr scurr ntlab rlab newid ids) ->
---   let insert n lst=HM.insert (show l) (n,lst) rlab ids
---     in
---   case HM.lookup (show l) (rlab ids) of
---     Just (n, lst) -> let nrlab ids = insert (n+1) lst in return (n + 1 , LIOState lcurr scurr ntlab nrlab)
---     Nothing -> let nrlab ids = insert 1 [] in return (1 , LIOState lcurr scurr ntlab  nrlab)
---   )
-    --createFlows l lcurr = [ (l, ll) | ll <- lcurr]
-    --insert n [] lcurr=HM.insert (show l) (n,createFlows (n) lcurr) 
-    --insert n lst lcurr=HM.insert (show l) (n, lst ++ createFlows (n) lcurr)
-
--- resetReplaying :: (Label l st r, Replaying r Int l st) => l -> SLIO l st r ()
--- resetReplaying l = SLIO (\(LIOState lcurr scurr ntlab rlab newid ids ) ->
---             let toReset (x:xs) = create l x ++ toReset xs
---                 toReset [] = []  in
---             return ((), LIOState lcurr scurr ntlab (rlab  \\ traceShow ("reset" ++ show (toReset lcurr)) toReset lcurr) ids))
-
-
--- trackUnlabel :: (Label l st r, Show a) => a -> Int -> SLIO l st r ()
--- trackUnlabel l id = --TODO: use id??
---   let k = show l
---   in  SLIO
---         (\(LIOState lcurr scurr ntlab rlab newid) ->
---           let nrlab = case HM.lookup k rlab of
---                 Just (i, ids, l) ->
---                   HM.insert k (i, nub $ id : ids, l) rlab
---           in  return ((), LIOState lcurr scurr ntlab nrlab)
---         )
 
 -- TODO: set true in rlab
 unlabel :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
-unlabel (Lb   l x i) = {-trackUnlabel l i >>-} unlabelInternal l i x --resetReplaying l >> return x
-
--- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
-unlabelNT :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
-unlabelNT (Lb l x i) = taintNT l i {-}>> trackUnlabel l i -}>> unlabelInternal l i x--resetReplaying l >> return x
-
-unlabelInternal l i x = taint l i>> return x
+unlabel (Lb   l x i) =  taint l i>> return x
 
 valueOf :: Labeled l a -> a
 valueOf (Lb   l x i) = x
--- valueOf (NTLb l x i) = x
 
-asNT :: (Replaying r l st, Label l st r) => (Labeled l a -> SLIO l st r a)-> Labeled l a -> SLIO l st r a
-asNT f ld@(Lb l a i) = do
+type ASFUN l st r a= Either (Labeled l a  -> SLIO l st r a) (LIORef l a  -> SLIO l st r a)
+
+instance Biapplicative Either where
+  (<<*>>) (Left f) (Left lv) = Left $ f lv
+  (<<*>>) (Right f) (Right lv) = Right $ f lv
+
+
+
+-- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
+asNT :: (Replaying r l st, Label l st r) => ASFUN l st r a -> Either (Labeled l a) (LIORef l a) -> SLIO l st r a
+asNT f ld@(Left ((Lb l a i))) = do
   taintNT l i
-  f ld
+  either id id (f <<*>> ld) 
+asNT f ld@(Right ((LIORef l a i))) = do
+  taintNT l i
+  either id id (f <<*>> ld) 
 
-asRP :: (Replaying r l st, Label l st r) => (Labeled l a -> SLIO l st r a)->[l] -> Labeled l a -> SLIO l st r a
-asRP f lst ld@(Lb l a i)= do
+asRP :: (Replaying r l st, Label l st r) => ASFUN l st r a-> [l] -> Either (Labeled l a) (LIORef l a) -> SLIO l st r a
+asRP f lst ld@(Left ((Lb l a i)))= do
   addPromises l i lst
-  f ld
-
--- asNT (asReplaying [] unlabel) (Lb l a i)
-
---asNT (\x -> asReplaying [] (ulabel) x) lv
-
---asReplaying :: [l] -> (f -> Labeled l a -> SLIO) -> f -> Labeled l a -> SLIO
-
-unlabelReplaying
-  :: (Replaying r l st, Label l st r) => Labeled l a -> [l] -> SLIO l st r a
-unlabelReplaying ld ls =
-  let l = labelOf ld
-      i = idOf ld
-      --rls (x : xs) = create l x i ++ rls xs
-      --rls []       = []
-  in  {-checkFlow l ls >>-} addPromises l i ls >> unlabel ld
-
-
--- to check that when replaying the flow is allowed (replaying flow) 
--- NOTE: you cannot say to replay a not existing flow
--- checkFlow :: (Replaying r l st, Label l st r) => l -> [l] -> SLIO l st r ()
--- checkFlow l ls = do
---   scurr <- getState
---   rlab  <- getReplaying
---   let checkPassed = all (check scurr [l] rlab) ls
---   unless checkPassed (lioError "check flow while replaying failed")
-
-
-
--- promiseRepRel
---   :: (Replaying r l st, Label l st r) => l -> [r l] -> SLIO l st r ()
--- promiseRepRel l ls = SLIO
---   (\(LIOState lcurr scurr ntlab rlab newid) ->
---     let k = show l
---     in
---       let newrls oldrls = map (, False) $ filter (`notElem` oldrls) ls
---       in
---         case HM.lookup k rlab of
---           Nothing ->
---             lioError
---               "It is impossible to have a labeled data without knowing that you have it"
---           Just (id, b, l) -> return
---             ( ()
---             , LIOState lcurr scurr ntlab
---               $ HM.insert k (id, b, l ++ newrls (map fst l)) rlab
---             )
---   )
-
-
--- taintRepRel :: (Replaying r l st, Label l st r) => l -> SLIO l st r ()
--- taintRepRel lab= SLIO
---   (\(LIOState lcurr scurr ntlab rlab newid) ->
---     let nrlab = foldr
---           (\l acc -> case HM.lookup (show l) acc of
---             Nothing            -> acc
---             Just (id, lids, l) -> HM.insert (show l)
---               ( id , lids
---               , map
---                 (\c@(rl, _) -> if rid rl `elem` lids && trg rl == lab then (rl, True) else c)
---                 l
---               )
---               acc
---           )
---           rlab
---           lcurr
---     in  return ((), LIOState lcurr scurr ntlab nrlab)
---   )
+  either id id (f <<*>> ld) 
+asRP f lst ld@(Right ((LIORef l a i)))= do
+  addPromises l i lst
+  either id id (f <<*>> ld) 
 
 
 insert :: (Hashable k, Eq a, Eq k) => HM.HashMap k [a] -> k -> a -> HM.HashMap k [a]
@@ -365,20 +241,6 @@ taintNT l i= SLIO
   (\(LIOState lcurr scurr ntlab rlab newid) ->
     return ((), LIOState lcurr scurr (insert ntlab l i) rlab newid)
   )
-
--- promiseRepRel :: (Eq l, Show l) => l -> [l] -> SLIO l st r (Map String (Int, [(Int, l)]))
--- promiseRepRel l rsinks= SLIO (\(LIOState lcurr scurr ntlab rlab newid ids) ->
---   let insert n lst=HM.insert (show l) (n,lst) rlab ids
---       createFlows l = [ (l, ll) | ll <- rsinks]
---     in
---        case HM.lookup (show l) (rlab ids) of
---         Just (n, lst) -> let nrlab ids = (insert n $ nub lst++createFlows n) in return (nrlab , LIOState lcurr scurr ntlab nrlab)
---       --Nothing -> let nrlab ids = (insert 1 $ createFlows 1) in return (1 , LIOState lcurr scurr ntlab  nrlab)
---   )
-
--- unlabelT :: Label l st r => TransientLabeled l a -> SLIO l st a
--- unlabelT (TLb l x) = taint l >> taintT l >> return x
-
 
 labelOf :: Labeled l a -> l
 labelOf (Lb   l x _) = l
@@ -401,7 +263,7 @@ newLIORef l x =
   do
   guard l
   checkAndRep l
-  --replayTo l
+  --enablePromises l
   ref <- io $ newIORef x
   LIORef l ref <$> getNewId
 
@@ -415,7 +277,7 @@ writeLIORef
 writeLIORef (LIORef l ref i) v = do
   guard l
   checkAndRep l
-  --replayTo l
+  --enablePromises l
   io (writeIORef ref v)
 
 labelOfRef :: LIORef l a -> l

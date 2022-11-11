@@ -39,6 +39,7 @@ library
     base          >= 4.7     && < 6.0
     ,containers
     ,bytestring
+    ,bifunctors
     ,hashable
     ,text
     ,unordered-containers == 0.2.19.1

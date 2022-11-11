@@ -67,7 +67,7 @@ instance Replaying Rep User Rel where
 
 
   -- replay everything in lcurr that has a promise for l
-  replayTo l = SLIO
+  enablePromises l = SLIO
     (\s@(LIOState lcurr st nt (Rep rl) id) ->
       let ls = HM.keys lcurr in  
       let nrl = HM.mapMaybeWithKey
@@ -194,7 +194,7 @@ replaying = do
   --file2 <- label (User "NSA") "secret 2"
   --file  <- unlabelReplaying file1 [User "Another"]
   --file  <- unlabelReplaying file1 [User "Military"] -- what if instead of file1 this is file2 ??
-  file <- asRP unlabel [User "Military"] file1
+  file <- asRP (Left unlabel) [User "Military"]  (Left file1)
   --lst <- getReplaying
   --file  <- unlabel file1
   mil   <- newLIORef (User "Military") file
