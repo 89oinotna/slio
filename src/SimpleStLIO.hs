@@ -29,10 +29,11 @@ module SimpleStLIO
   , readLIORef
   , labelOfRef
   , toLabeled
-  -- , labelNT
-  , getReplaying
+ -- , prova
+  ,getReplaying
   , asNT
   , asRP
+  ,io
   )--, unlabelR)--, sfmap)
     where
 
@@ -112,7 +113,7 @@ class (Eq l, Show l, Hashable l) => Label l st r where
   -- to avoid to conditional allow a flow
   incUpperSet :: st -> st -> HM.HashMap l [Int] -> r -> r -> l -> Bool
 
-newtype LV l a = LV (Either (Labeled l a) (LIORef l a))
+--newtype LV l a = LV (Either (Labeled l a) (LIORef l a))
 
 data Labeled l a  = Lb l a Int
              deriving (Eq, Show)
@@ -120,9 +121,24 @@ data Labeled l a  = Lb l a Int
 data LIORef l a = LIORef l (IORef a) Int
 
 
+class LV a b l c |a c-> b where
+  getValue' :: a l c -> b
+  getLabel' :: a l c-> l
+  getId' :: a l c-> Int
 
+instance LV (LIORef) (IORef a) l a where
+  getValue' (LIORef l ior i) = ior
+  getLabel' (LIORef l ior i) = l
+  getId' (LIORef l ior i) = i
+
+instance LV (Labeled) a l a where
+  getValue' (Lb l a i) = a
+  getLabel' (Lb l ior i) = l
+  getId' (Lb l ior i) = i
 
 lioError s = fail s
+
+
 
 -- internal primitives
 
@@ -199,30 +215,42 @@ unlabel (Lb   l x i) =  taint l i>> return x
 valueOf :: Labeled l a -> a
 valueOf (Lb   l x i) = x
 
-type ASFUN l st r a= Either (Labeled l a  -> SLIO l st r a) (LIORef l a  -> SLIO l st r a)
+--type ASFUN l st r a= Either (Labeled l a  -> SLIO l st r a) (LIORef l a  -> SLIO l st r a)
 
-instance Biapplicative Either where
-  (<<*>>) (Left f) (Left lv) = Left $ f lv
-  (<<*>>) (Right f) (Right lv) = Right $ f lv
+-- instance Biapplicative Either where
+--   (<<*>>) (Left f) (Left lv) = Left $ f lv
+--   (<<*>>) (Right f) (Right lv) = Right $ f lv
 
+-- prova :: (Replaying r l st, Label l st r, SS c d l a) => (c l a -> SLIO l st r a) -> c l a-> SLIO l st r a
+-- prova f ld = do
+--   taintNT (getLabel' ld) (getId' ld)
+--   f ld
+asNT :: (Replaying r l st, Label l st r, LV c d l a) => (c l a -> SLIO l st r a) -> c l a-> SLIO l st r a
+asNT f ld = do
+  taintNT (getLabel' ld) (getId' ld)
+  f ld
 
+asRP :: (Replaying r l st, Label l st r, LV c d l a) => (c l a -> SLIO l st r a) ->[l] -> c l a-> SLIO l st r a
+asRP f lst ld= do
+  addPromises (getLabel' ld) (getId' ld) lst
+  f ld
 
 -- NOTE: non transitive values are managed by adding their label to lcurr (coming from toLabeled)
-asNT :: (Replaying r l st, Label l st r) => ASFUN l st r a -> Either (Labeled l a) (LIORef l a) -> SLIO l st r a
-asNT f ld@(Left ((Lb l a i))) = do
-  taintNT l i
-  either id id (f <<*>> ld) 
-asNT f ld@(Right ((LIORef l a i))) = do
-  taintNT l i
-  either id id (f <<*>> ld) 
+-- asNT :: (Replaying r l st, Label l st r) => ASFUN l st r a -> Either (Labeled l a) (LIORef l a) -> SLIO l st r a
+-- asNT f ld@(Left ((Lb l a i))) = do
+--   taintNT l i
+--   either id id (f <<*>> ld) 
+-- asNT f ld@(Right ((LIORef l a i))) = do
+--   taintNT l i
+--   either id id (f <<*>> ld) 
 
-asRP :: (Replaying r l st, Label l st r) => ASFUN l st r a-> [l] -> Either (Labeled l a) (LIORef l a) -> SLIO l st r a
-asRP f lst ld@(Left ((Lb l a i)))= do
-  addPromises l i lst
-  either id id (f <<*>> ld) 
-asRP f lst ld@(Right ((LIORef l a i)))= do
-  addPromises l i lst
-  either id id (f <<*>> ld) 
+-- asRP :: (Replaying r l st, Label l st r) => ASFUN l st r a-> [l] -> Either (Labeled l a) (LIORef l a) -> SLIO l st r a
+-- asRP f lst ld@(Left ((Lb l a i)))= do
+--   addPromises l i lst
+--   either id id (f <<*>> ld) 
+-- asRP f lst ld@(Right ((LIORef l a i)))= do
+--   addPromises l i lst
+--   either id id (f <<*>> ld) 
 
 
 insert :: (Hashable k, Eq a, Eq k) => HM.HashMap k [a] -> k -> a -> HM.HashMap k [a]

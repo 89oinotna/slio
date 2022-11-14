@@ -9,7 +9,7 @@
 module Main
   ( main
   ) where
-
+import Data.IORef ( newIORef, readIORef, writeIORef, IORef )
 import           Debug.Trace
 
 import           SimpleStLIO
@@ -194,11 +194,13 @@ replaying = do
   --file2 <- label (User "NSA") "secret 2"
   --file  <- unlabelReplaying file1 [User "Another"]
   --file  <- unlabelReplaying file1 [User "Military"] -- what if instead of file1 this is file2 ??
-  file <- asRP (Left unlabel) [User "Military"]  (Left file1)
+  -- file <- asRP (Left unlabel) [User "Military"]  (Left file1)
+  file <- asRP ( unlabel) [User "Military"]  ( file1)
   --lst <- getReplaying
   --file  <- unlabel file1
   mil   <- newLIORef (User "Military") file
   --writeLIORef mil ""
+  --b <- prova (unlabel) file1
   disallowNM
   writeLIORef mil ""
   --mil   <- newLIORef (User "Military") file
