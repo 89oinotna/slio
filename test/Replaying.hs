@@ -200,7 +200,6 @@ replaying = do
   --file  <- unlabel file1
   mil   <- newLIORef (User "Military") file
   --writeLIORef mil ""
-  --b <- prova (unlabel) file1
   disallowNM
   writeLIORef mil ""
   --mil   <- newLIORef (User "Military") file

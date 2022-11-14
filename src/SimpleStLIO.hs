@@ -29,8 +29,6 @@ module SimpleStLIO
   , readLIORef
   , labelOfRef
   , toLabeled
- -- , prova
-  ,getReplaying
   , asNT
   , asRP
   ,io
@@ -40,7 +38,7 @@ module SimpleStLIO
 
 
 import           Control.Applicative
-import Data.Biapplicative
+--import Data.Biapplicative
 
 import           Control.Monad.Fail             ( MonadFail(..) )
 import           Prelude                 hiding ( fail )
@@ -48,11 +46,6 @@ import           Prelude                 hiding ( fail )
 import Control.Monad ( MonadFail(fail), ap, liftM, unless, when )
 import Data.IORef ( newIORef, readIORef, writeIORef, IORef )
 import Data.List ( nub )
-import  qualified         Data.Map                     ( Map
-                                                , empty
-                                                , insert
-                                                , lookup, keys, unionWith
-                                                )
 import           Debug.Trace                    ( traceShow )
 import qualified Data.List as List
 import qualified Data.HashMap.Strict as HM
@@ -121,18 +114,18 @@ data Labeled l a  = Lb l a Int
 data LIORef l a = LIORef l (IORef a) Int
 
 
-class LV a b l c |a c-> b where
-  getValue' :: a l c -> b
-  getLabel' :: a l c-> l
-  getId' :: a l c-> Int
+class LV t l where-- |tlv c-> v where
+  --getValue' :: tlv l c -> v
+  getLabel' :: t l a-> l
+  getId' :: t l a-> Int
 
-instance LV (LIORef) (IORef a) l a where
-  getValue' (LIORef l ior i) = ior
+instance LV LIORef l  where
+  --getValue' (LIORef l ior i) = ior
   getLabel' (LIORef l ior i) = l
   getId' (LIORef l ior i) = i
 
-instance LV (Labeled) a l a where
-  getValue' (Lb l a i) = a
+instance LV Labeled l  where
+  --getValue' (Lb l a i) = a
   getLabel' (Lb l ior i) = l
   getId' (Lb l ior i) = i
 
@@ -225,12 +218,12 @@ valueOf (Lb   l x i) = x
 -- prova f ld = do
 --   taintNT (getLabel' ld) (getId' ld)
 --   f ld
-asNT :: (Replaying r l st, Label l st r, LV c d l a) => (c l a -> SLIO l st r a) -> c l a-> SLIO l st r a
+asNT :: (Replaying r l st, Label l st r, LV t l) => (t l a-> SLIO l st r a) -> t l a-> SLIO l st r a
 asNT f ld = do
   taintNT (getLabel' ld) (getId' ld)
   f ld
 
-asRP :: (Replaying r l st, Label l st r, LV c d l a) => (c l a -> SLIO l st r a) ->[l] -> c l a-> SLIO l st r a
+asRP :: (Replaying r l st, Label l st r, LV t l) => (t l a -> SLIO l st r a) ->[l] -> t l a-> SLIO l st r a
 asRP f lst ld= do
   addPromises (getLabel' ld) (getId' ld) lst
   f ld
