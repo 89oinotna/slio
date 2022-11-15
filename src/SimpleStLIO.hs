@@ -310,19 +310,23 @@ toLabeled
   => l
   -> SLIO l st r a
   -> SLIO l st r (Labeled l a)
-toLabeled l m = do
-      x <- SLIO
+toLabeled l m = 
+      SLIO
         (\s@(LIOState ll ss tt rr nid) ->traceShow ll $ do
               (x, LIOState lcurr scurr ntlab rlab newid) <- unSLIO m s
               let checkPassed = traceShow ("lcurr:" ++ show lcurr)
                     -- $ check scurr lcurr rr l
                     $ check scurr lcurr rlab l
               unless checkPassed (lioError "label check failed")
-              return (Lb l x newid, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab (newid+1))
+              let news = LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab (newid+1)
+              (_, LIOState lcurr' _ _ rlab' _) <- unSLIO (enablePromises l) news
+              when (any (incUpperSet ss ss lcurr' rr rlab') $ HM.keys lcurr')
+                (lioError "incUpperClosure check failed")
+              return (Lb l x newid, news)
               --return (Lb l x nid, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rr (nid+1))
         )
-      checkAndRep l
-      return x
+      --checkAndRep l
+      --return x
     -- >>= label l --(\x -> do
         --  Lb l x <$> getNewId
         --)
