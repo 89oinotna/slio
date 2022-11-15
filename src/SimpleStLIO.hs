@@ -310,16 +310,17 @@ toLabeled
   => l
   -> SLIO l st r a
   -> SLIO l st r (Labeled l a)
-toLabeled l m =
-  SLIO
-      (\s@(LIOState ll ss tt rr nid) ->
-        traceShow ll $ do
+toLabeled l m = do
+      x <- SLIO
+        (\s@(LIOState ll ss tt rr nid) ->traceShow ll $ do
               (x, LIOState lcurr scurr ntlab rlab newid) <- unSLIO m s
               let checkPassed = traceShow ("lcurr:" ++ show lcurr)
                     $ check scurr lcurr rr l
               unless checkPassed (lioError "label check failed")
-              return (x, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab newid)
-      )
-    >>= (\x -> do
-          Lb l x <$> getNewId
+              return (Lb l x newid, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab (newid+1))
         )
+      checkAndRep l
+      return x
+    -- >>= label l --(\x -> do
+        --  Lb l x <$> getNewId
+        --)
