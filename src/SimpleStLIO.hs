@@ -318,7 +318,7 @@ toLabeled l m =
               let checkPassed = traceShow ("lcurr:" ++ show lcurr)
                     $ check scurr lcurr rr l
               unless checkPassed (lioError "label check failed")
-              return (x, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab nid)
+              return (x, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab newid)
       )
     >>= (\x -> do
           Lb l x <$> getNewId
