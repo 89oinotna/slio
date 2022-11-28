@@ -6,7 +6,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DatatypeContexts #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# LANGUAGE InstanceSigs #-}

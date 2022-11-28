@@ -64,3 +64,5 @@ main = do
     (r, s) <- unSLIO replaying initState
     print r
     print s
+
+-- replaying by relabeling is not ok
