@@ -46,13 +46,13 @@ disallowMB :: SLIO User Rel (Rep) ()
 disallowMB = do
   rel <- getState
   let (Rel st) = rel
-  setState (Rel $ st \\ [(User "Military", User "Another")])
+  setState (Rel $ st \\ [(User "Military", User "Bob")])
 
 allowMB :: SLIO User Rel (Rep) ()
 allowMB = do
   rel <- getState
   let (Rel st) = rel
-  setState (Rel $ st ++ [(User "Military", User "Another")])
+  setState (Rel $ st ++ [(User "Military", User "Bob")])
 
 allowNM :: SLIO User Rel (Rep) ()
 allowNM = do
@@ -64,7 +64,7 @@ allowNM = do
 leak :: SLIO User Rel Rep Integer
 leak = do
   file1 <- label (User "NSA") 0
-  r <- newLIORef (User "Another") 1
+  r <- newLIORef (User "Bob") 1
 
   --file  <- unlabel file1
   --mil   <- newLIORef (User "Military") file
@@ -78,8 +78,20 @@ leak = do
       writeLIORef r 0))
   readLIORef r
 
+rptt :: SLIO User Rel Rep Integer
+rptt = do
+  file <- label (User "NSA") 0
+  x <- toLabeled (User "Military") $ do
+                  asRP (asNT unlabel) [User "Military"] file
+  disallowNM
+  allowMB
+  b <- relabel file (User "Bob") 
+  unlabel b
+   
+
+
 main :: IO ()
 main = do
-  (r, s) <- unSLIO leak initState
+  (r, s) <- unSLIO rptt initState
   print r
   print s

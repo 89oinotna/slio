@@ -76,7 +76,9 @@ class (Show (r), Label l st r) => Replaying r l st | r l-> st where
 
   addPromises :: l -> Int -> [l] -> SLIO l st r ()
 
-  enablePromises :: l -> SLIO l st r ()
+  enableRP :: l -> SLIO l st r ()
+
+  disableRP :: l -> Int -> SLIO l st r ()
 
 
 
@@ -188,7 +190,7 @@ io m = SLIO (\s -> fmap (, s) m)
 label :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
 label l x = do
   guard l
-  enablePromises l
+  enableRP l
   Lb l x <$> getNewId
 
 getNewId :: (Replaying r l st, Label l st r) => SLIO l st r Int
@@ -284,7 +286,7 @@ newLIORef
 newLIORef l x = 
   do
   guard l
-  enablePromises l
+  enableRP l
   --enablePromises l
   ref <- io $ newIORef x
   LIORef l ref <$> getNewId
@@ -298,9 +300,11 @@ writeLIORef
   :: (Replaying r l st, Label l st r) => LIORef l a -> a -> SLIO l st r ()
 writeLIORef (LIORef l ref i) v = do
   guard l
-  enablePromises l
+  enableRP l
+  disableRP l i
   --enablePromises l
   io (writeIORef ref v)
+
 
 labelOfRef :: LIORef l a -> l
 labelOfRef (LIORef l ref i) = l
@@ -315,7 +319,7 @@ toLabeled l m =
       SLIO
         (\s@(LIOState ll ss tt rr nid) ->traceShow ll $ do
               (x, s'@(LIOState lcurr scurr ntlab rlab newid)) <- unSLIO m s
-              (_, LIOState _ _ _ rlab' _) <- unSLIO (enablePromises l) s'
+              (_, LIOState _ _ _ rlab' _) <- unSLIO (enableRP l) s'
               let checkPassed = traceShow ("lcurr:" ++ show lcurr)
                     -- $ check scurr lcurr rr l
                     $ check scurr lcurr rlab l

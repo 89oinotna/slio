@@ -65,7 +65,7 @@ instance Replaying Rep User Rel where
 
 
   -- replay everything in lcurr that has a promise for l
-  enablePromises l = SLIO
+  enableRP l = SLIO
     (\s@(LIOState lcurr st nt (Rep rl) id) ->
       let ls = HM.keys lcurr in  
       let nrl = HM.mapMaybeWithKey
@@ -74,6 +74,15 @@ instance Replaying Rep User Rel where
           in  traceShow ("post"++show nrl) return ((), LIOState lcurr st nt (Rep nrl) id)
 
     )
+  
+  disableRP l i =SLIO
+    (\s@(LIOState lcurr st nt (Rep rl) id) ->
+      let newrl = (HM.mapMaybeWithKey
+                (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
+                rl)
+                in  traceShow ("post"++show newrl) return ((), LIOState lcurr st nt (Rep newrl) id)
+
+    ) 
 
 
 instance Label User Rel Rep where
