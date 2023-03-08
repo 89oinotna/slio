@@ -15,6 +15,7 @@ initState :: LIOState User Rel Rep
 initState = LIOState { lcurr = HM.empty
                      , scurr = Rel [(User "Data", User "App")]
                      , ntlab = HM.empty
+  , assocnt = HM.empty
   , rlab  = Rep HM.empty
   , newid = 0
   }

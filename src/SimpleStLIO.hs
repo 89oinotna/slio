@@ -57,6 +57,7 @@ data  LIOState l st r = LIOState
   { lcurr :: HM.HashMap l [Int]
   , scurr :: st
   , ntlab :: HM.HashMap l [Int]
+  , assocnt :: HM.HashMap (l, Int) (HM.HashMap l [Int])
   , rlab  :: r
   , newid :: Int
   }--, ids :: Map String Int }
@@ -142,6 +143,11 @@ getLabel = SLIO (\s -> return (lcurr s, s))
 getState :: (Replaying r l st, Label l st r) => SLIO l st r st
 getState = SLIO (\s -> return (scurr s, s))
 
+
+getNT = SLIO (\s -> return (ntlab s, s))
+
+getAssocNT l i =SLIO (\s@(LIOState lcurr scurr ntlab assocnt rlab newid) -> return (HM.lookupDefault HM.empty (l,i) assocnt, s))
+
 getReplaying
   :: (Label l st r, Replaying r l st)
   => SLIO l st r r
@@ -152,10 +158,10 @@ getReplaying = SLIO (\s -> return (rlab s, s))
 
 setState :: (Replaying r l st, Label l st r) => st -> SLIO l st r ()
 setState st = SLIO
-  (\(LIOState lcurr scurr ntlab rlab newid) -> do
+  (\(LIOState lcurr scurr ntlab assocnt rlab newid) -> do
     when (any (incUpperSet scurr st lcurr rlab rlab) $ HM.keys lcurr)
          (lioError "incUpperClosure check failed")
-    return ((), LIOState lcurr st ntlab rlab newid)
+    return ((), LIOState lcurr st ntlab assocnt rlab newid)
   )
 
 
@@ -178,7 +184,7 @@ io m = SLIO (\s -> fmap (, s) m)
 -- NOTE: it is wrong to check for incUpperSet since the flow is already enable so the check has benn removed
 -- enableReplay ::(Replaying r l st, Label l st r) => l -> SLIO l st r ()
 -- enableReplay l = 
--- enableReplay l=  SLIO (\s@(LIOState lcurr scurr ntlab rlab newid) -> do
+-- enableReplay l=  SLIO (\s@(LIOState lcurr scurr ntlab assocnt rlab newid) -> do
 --     (_, LIOState _ _ _ rlab' _) <- unSLIO (enablePromises l) s
 --     when (any (incUpperSet scurr scurr lcurr rlab rlab') $ HM.keys lcurr)
 --          (lioError "incUpperClosure check failed")
@@ -187,26 +193,40 @@ io m = SLIO (\s -> fmap (, s) m)
 
 -- exported functions
 
+addAssocNt l i= SLIO (\(LIOState lcurr scurr ntlab assocnt rlab newid) ->
+              return ((), (LIOState lcurr scurr ntlab (HM.insertWith (HM.unionWith List.union) (l,i) ntlab assocnt) rlab newid)))
+
 label :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
 label l x = do
   guard l
   enableRP l
-  Lb l x <$> getNewId
+  nt <- getNT
+  i <- getNewId
+  addAssocNt l i
+  return (Lb l x i)
 
 getNewId :: (Replaying r l st, Label l st r) => SLIO l st r Int
 getNewId = SLIO
-  (\(LIOState lcurr scurr ntlab rlab newid) ->
+  (\(LIOState lcurr scurr ntlab assocnt rlab newid) ->
           return
             ( newid
             --, LIOState lcurr scurr ntlab $ HM.insert k (n + 1, b, l) rlab
-            , LIOState lcurr scurr ntlab rlab $ newid + 1
+            , LIOState lcurr scurr ntlab assocnt rlab $ newid + 1
             )
   )
 
 
+
 -- TODO: set true in rlab
 unlabel :: (Replaying r l st, Label l st r) => Labeled l a -> SLIO l st r a
-unlabel (Lb   l x i) =  taint l i>> return x
+unlabel (Lb l x i) = do 
+    (taint l i)
+    nt <- getAssocNT l i
+    traceShow (l,i) $ taintNT' nt
+    taint' nt
+      --  >> sequence (map (\(ll, ii) -> taint ll ii) lst)
+      --  >> sequence (map (\(ll, ii) -> taintNT ll ii) lst) 
+    return x
 
 valueOf :: Labeled l a -> a
 valueOf (Lb   l x i) = x
@@ -256,18 +276,28 @@ insert m k v = case HM.lookup k m of
 
 taint :: (Replaying r l st, Label l st r) => l -> Int -> SLIO l st r ()
 taint l i= SLIO
-  (\(LIOState lcurr scurr ntlab rlab newid) ->
-    return ((), LIOState (insert lcurr l i) scurr ntlab rlab newid)
+  (\(LIOState lcurr scurr ntlab assocnt rlab newid) ->
+    return ((), LIOState (insert lcurr l i) scurr ntlab assocnt rlab newid)
+  )
+
+taint' ls= SLIO
+  (\(LIOState lcurr scurr ntlab assocnt rlab newid) ->
+    return ((), LIOState (HM.unionWith List.union ls lcurr) scurr ntlab assocnt rlab newid)
   )
 
 taintNT :: (Replaying r l st, Label l st r) => l -> Int -> SLIO l st r ()
 taintNT l i= SLIO
-  (\(LIOState lcurr scurr ntlab rlab newid) ->
-    return ((), LIOState lcurr scurr (insert ntlab l i) rlab newid)
+  (\(LIOState lcurr scurr ntlab assocnt rlab newid) ->
+    return ((), LIOState lcurr scurr (insert ntlab l i) assocnt rlab newid)
+  )
+
+taintNT' nt= SLIO
+  (\(LIOState lcurr scurr ntlab assocnt rlab newid) ->
+    return ((), LIOState lcurr scurr (HM.unionWith List.union nt ntlab) assocnt rlab newid)
   )
 
 labelOf :: Labeled l a -> l
-labelOf (Lb   l x _) = l
+labelOf (Lb l x _) = l
 -- labelOf (NTLb l x _) = l
 
 idOf :: Labeled l a -> Int
@@ -288,12 +318,18 @@ newLIORef l x =
   guard l
   enableRP l
   --enablePromises l
+  nt <- getNT
   ref <- io $ newIORef x
-  LIORef l ref <$> getNewId
+  i <- getNewId
+  addAssocNt l i
+  return (LIORef l ref i)
 
 readLIORef :: (Replaying r l st, Label l st r) => LIORef l a -> SLIO l st r a
 readLIORef (LIORef l ref i) = do
-  taint l i
+  (taint l i) 
+  nt <- getAssocNT l i
+  taintNT' nt
+  taint' nt
   io (readIORef ref)
 
 writeLIORef
@@ -302,6 +338,7 @@ writeLIORef (LIORef l ref i) v = do
   guard l
   enableRP l
   disableRP l i
+  addAssocNt l i
   --enablePromises l
   io (writeIORef ref v)
 
@@ -317,17 +354,19 @@ toLabeled
   -> SLIO l st r (Labeled l a)
 toLabeled l m = 
       SLIO
-        (\s@(LIOState ll ss tt rr nid) ->traceShow ll $ do
-              (x, s'@(LIOState lcurr scurr ntlab rlab newid)) <- unSLIO m s
-              (_, LIOState _ _ _ rlab' _) <- unSLIO (enableRP l) s'
-              let checkPassed = traceShow ("lcurr:" ++ show lcurr)
+        (\s@(LIOState ll ss nt ant rr nid) ->traceShow ll $ do
+              (x, s'@(LIOState lcurr scurr nt' ant' rlab newid)) <- unSLIO m s
+              (_, LIOState _ _ _ _ rlab' _) <- (unSLIO (enableRP l) s')
+              let checkPassed = traceShow ("lcurr tolabeled:" ++ show lcurr)
                     -- $ check scurr lcurr rr l
                     $ check scurr lcurr rlab l
               unless checkPassed (lioError "label check failed")
-              let news = LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rlab' (newid+1)
+              let news = LIOState (ll) ss (nt) (HM.insertWith (HM.unionWith List.union) (l, newid) nt' ant') rlab' (newid+1)
+              --let lst =concat (map (\(k,v) -> map (k,) v) (HM.toList (HM.unionWith List.union tt ntlab)))
+
               --when (any (incUpperSet ss ss lcurr' rr rlab') $ HM.keys lcurr')
               --  (lioError "incUpperClosure check failed")
-              return (Lb l x newid, news)
+              return (Lb l x newid, traceShow ("news:"++(show $ assocnt news)) news)
               --return (Lb l x nid, LIOState (HM.unionWith List.union ntlab ll) ss (HM.unionWith List.union tt ntlab) rr (nid+1))
         )
       --enableReplay l

@@ -32,6 +32,7 @@ initState =LIOState
   { lcurr = HM.empty
   , scurr = Rel [(User "NSA", User "Military")]
   , ntlab = HM.empty
+  , assocnt = HM.empty
   , rlab  = Rep HM.empty
   , newid = 0
   }
@@ -88,10 +89,19 @@ rptt = do
   b <- relabel file (User "Bob") 
   unlabel b
    
-
+secure :: SLIO User Rel Rep Integer
+secure = do
+  n <- label (User "NSA") 0
+  m <- toLabeled (User "Military") $ do
+        asRP (unlabel) [User "Military"] n
+  disallowNM
+  allowMB
+  relabel n (User "Bob") 
+  return 0
+  --unlabel b
 
 main :: IO ()
 main = do
-  (r, s) <- unSLIO rptt initState
+  (r, s) <- unSLIO secure initState
   print r
   print s

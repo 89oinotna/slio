@@ -36,6 +36,7 @@ initState = LIOState
   , scurr = Rel
               [(User "NSA", User "Military"), (User "Military", User "Another")]
   , ntlab = HM.empty
+  , assocnt = HM.empty
   , rlab  = Rep HM.empty
   , newid = 0
   }

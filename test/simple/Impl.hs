@@ -7,7 +7,11 @@
 {-# LANGUAGE TupleSections #-}
 
 module Impl where
-import Data.IORef ( newIORef, readIORef, writeIORef, IORef )
+import           Data.IORef                     ( IORef
+                                                , newIORef
+                                                , readIORef
+                                                , writeIORef
+                                                )
 import           Debug.Trace
 
 import           SimpleStLIO
@@ -37,7 +41,12 @@ newtype Rel = Rel [(User, User)] deriving (Show )
 -- newtype Rep l= Rep (HM.HashMap (l, Int) [(l, Bool)]) -- to which labels is replaying
 newtype Rep= Rep (HM.HashMap User [(User, Int, User, Bool)]) deriving (Show) -- to which labels is replaying
 
-insert :: (Hashable k, Eq a, Eq k) => HM.HashMap k [a] -> k -> [a] -> HM.HashMap k [a]
+insert
+  :: (Hashable k, Eq a, Eq k)
+  => HM.HashMap k [a]
+  -> k
+  -> [a]
+  -> HM.HashMap k [a]
 insert m k v = case HM.lookup k m of
   Nothing -> HM.insert k v m
   Just xs -> HM.insert k (nub $ v ++ xs) m
@@ -46,7 +55,7 @@ insert m k v = case HM.lookup k m of
 instance Replaying Rep User Rel where
   --addPromises :: l -> Int -> [l] -> SLIO l st r ()
   addPromises l i lst = SLIO
-    (\s@(LIOState lcurr st nt (Rep rl) id) ->
+    (\s@(LIOState lcurr st nt assocnt (Rep rl) id) ->
       let genl = List.map (l, i, , False) lst
       in
         let
@@ -60,41 +69,59 @@ instance Replaying Rep User Rel where
               )
         in 
       --let lst' = List.map (l, i, , False) lst in
-            return ((), LIOState lcurr st nt (Rep nrl) id)
+            return ((), LIOState lcurr st nt assocnt (Rep nrl) id)
     )
 
 
   -- replay everything in lcurr that has a promise for l
   enableRP l = SLIO
-    (\s@(LIOState lcurr st nt (Rep rl) id) ->
-      let ls = HM.keys lcurr in  
-      let nrl = HM.mapMaybeWithKey
-                (\k lst -> Just (List.map (\v@(l1, i, l2, b)-> if l2 == l && l1 `elem` ls then (l1,i,l2, True) else v) lst))
-                rl
-          in  traceShow ("post"++show nrl) return ((), LIOState lcurr st nt (Rep nrl) id)
-
+    (\s@(LIOState lcurr st nt assocnt (Rep rl) id) ->
+      let ls = HM.keys lcurr
+      in
+        let
+          nrl = HM.mapMaybeWithKey
+            (\k lst -> Just
+              (List.map
+                (\v@(l1, i, l2, b) ->
+                  if l2 == l && l1 `elem` ls then (l1, i, l2, True) else v
+                )
+                lst
+              )
+            )
+            rl
+        in  traceShow ("post" ++ show nrl)
+                      return
+                      ((), LIOState lcurr st nt assocnt (Rep nrl) id)
     )
-  
-  disableRP l i =SLIO
-    (\s@(LIOState lcurr st nt (Rep rl) id) ->
-      let newrl = (HM.mapMaybeWithKey
-                (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
-                rl)
-                in  traceShow ("post"++show newrl) return ((), LIOState lcurr st nt (Rep newrl) id)
 
-    ) 
+  disableRP l i = SLIO
+    (\s@(LIOState lcurr st nt assocnt (Rep rl) id) ->
+      let
+        newrl =
+          (HM.mapMaybeWithKey
+              -- (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
+            (\k lst -> Just
+              (List.filter (\v@(l1, i1, l2, b) -> l1 /= l && i /= i1) lst)
+            )
+            rl
+          )
+      in  traceShow ("post" ++ show newrl)
+                    return
+                    ((), LIOState lcurr st nt assocnt (Rep newrl) id)
+    )
 
 
 instance Label User Rel Rep where
   -- lcurr must be added to have refl of labels not in st
-  lrt (Rel st) lcurr (Rep rl) lbl1 lbl2 = (traceShow (show s ++ "nrlab:" ++ show nrlab)
-                                           (lbl1, lbl2) `elem` s) ||
+  lrt (Rel st) lcurr (Rep rl) lbl1 lbl2 =
+    (traceShow (show s ++ "nrlab:" ++ show nrlab) (lbl1, lbl2) `elem` s)
+      ||
      --  check that for each id the replaying is allowed
-                                                                     checkRep
+         checkRep
    where
-    r   = refl $ HM.keys lcurr
+    r = refl $ HM.keys lcurr
     --Rel rst = inject rlab st
-    s   = reflTransClosure $ nub (st ++ r)
+    s = reflTransClosure $ nub (st ++ r)
     transClosure st rlab =
       -- Perform one step of transitive closure, i.e. if we have both (e1,e2) and
       -- (e2,e3), add (e1,e3).
@@ -115,14 +142,14 @@ instance Label User Rel Rep where
       -- If we found new relations we need to look for more recursively, otherwise
       -- we are done.
       in  if length rlab == length nxs then nxs else transClosure st nxs
-    rtr = transClosure s (concat $ HM.elems rl)
+    rtr      = transClosure s (concat $ HM.elems rl)
         -- $ concatMap (\(_, _, l) -> l) (Data.Map.elems rlab)
     nrlab    = HM.fromListWith (++) $ map (\e@(l, i, l2, b) -> (l, [e])) rtr
     checkRep = case HM.lookup lbl1 nrlab of
-      Nothing -> False
+      Nothing    -> False
       Just rplTo -> case HM.lookup lbl1 lcurr of
-            Nothing  -> False
-            Just lst -> all (\i -> (lbl1, i, lbl2, True) `elem` rplTo) lst --for all the ids there is the flow
+        Nothing  -> False
+        Just lst -> all (\i -> (lbl1, i, lbl2, True) `elem` rplTo) lst --for all the ids there is the flow
 
   -- Check if there is any user who may see information
   -- from this user, and could not do before. If yes,
@@ -132,15 +159,16 @@ instance Label User Rel Rep where
     in  any
           (\u ->
             not
-                (traceShow ("not"++show user++show u)--(lrt (Rel oldSt) lcurr rlab user u)
+                (traceShow ("not" ++ show user ++ show u)--(lrt (Rel oldSt) lcurr rlab user u)
                            (lrt (Rel oldSt) lcurr rlab user u)
                 )
-              && traceShow ("and"++show user++show u)--(lrt (Rel newSt) lcurr rlab user u)
-                           lrt
-                           (Rel newSt)
-                           lcurr
-                           rlab'
-                           user
-                           u
+              && traceShow
+                   ("and" ++ show user ++ show u)--(lrt (Rel newSt) lcurr rlab user u)
+                   lrt
+                   (Rel newSt)
+                   lcurr
+                   rlab'
+                   user
+                   u
           )
           others
