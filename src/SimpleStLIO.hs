@@ -10,7 +10,7 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# LANGUAGE InstanceSigs #-}
 module SimpleStLIO
-  ( SLIO(..)
+  ( SLIO
   , Labeled
   , LIORef
   , Label(..)
@@ -30,8 +30,8 @@ module SimpleStLIO
   , toLabeled
   , asNT
   , asRP
-  ,io
-  )--, unlabelR)--, sfmap)
+  , io
+  )
     where
 
 
@@ -45,10 +45,10 @@ import           Control.Applicative
 import           Control.Monad.Fail             ( MonadFail(..) )
 import           Prelude                 hiding ( fail )
 
-import Control.Monad ( MonadFail(fail), ap, liftM, unless, when )
+import Control.Monad (unless, when )
 import Data.IORef ( newIORef, readIORef, writeIORef, IORef )
 import Data.List ( nub )
-import           Debug.Trace                    ( traceShow )
+-- import           Debug.Trace                    ( traceShow )
 import qualified Data.List as List
 import qualified Data.HashMap.Strict as HM
 import Data.Hashable
@@ -74,71 +74,48 @@ data  LIOState l st r = LIOState
 -- data R l l1 = Rep Int l l1
 --   deriving (Eq, Show)
 
-class (Show (r), Label l st r) => Replaying r l st | r l-> st where
-  -- TODO : use id info
-  -- getNewId ::  l -> SLIO l st r Int
-
-  -- trackUnlabel :: l -> Int -> SLIO l st r ()
-
+class (Show r, Label l st r) => Replaying r l st | r l -> st where
   addPromises :: l -> Int -> [l] -> SLIO l st r ()
-
-  enableRP :: l -> SLIO l st r ()
-
-  disableRP :: l -> Int -> SLIO l st r ()
+  enableRP    :: l -> SLIO l st r ()
+  disableRP   :: l -> Int -> SLIO l st r ()
 
 
+class HasNTLab l st where
+  getNTLab :: st -> HM.HashMap l [Int]
+  setNTLab :: HM.HashMap l [Int] -> st -> st
+  modifyNTLab :: (HM.HashMap l [Int] -> HM.HashMap l [Int]) -> st -> st
+  modifyNTLab m st = setNTLab (m (getNTLab st)) st 
+  
+instance HasNTLab l (LIOState l st r) where
+  getNTLab = ntlab
+  setNTLab nt s = s { ntlab = nt }
 
 type SLIO l st r a = StateT (LIOState l st r) IO a 
 
-{- 
-instance Monad (SLIO l st r) where
-  return x = SLIO (\s -> return (x, s))
-  SLIO f >>= g = SLIO $ \s -> do
-    (x, s') <- f s
-    unSLIO (g x) s'
-
-instance MonadFail (SLIO l st r) where
-  fail err = SLIO (\_ -> fail err)
-
-instance Functor (SLIO l st r) where
-  fmap = liftM
-
-instance Applicative (SLIO l st r) where
-  pure  = return
-  (<*>) = ap
-
--} 
-
 class (Eq l, Show l, Hashable l) => Label l st r where
-  -- check to ensure that l1 lis less restricrtive than l2 in s
   lrt :: st -> HM.HashMap l [Int] -> r -> l -> l -> Bool
-
-  -- to avoid to conditional allow a flow
   incUpperSet :: st -> st -> HM.HashMap l [Int] -> r -> r -> l -> Bool
 
---newtype LV l a = LV (Either (Labeled l a) (LIORef l a))
 
-data Labeled l a  = Lb l a Int
+data Labeled l a  = Lb { labelOf :: l, valueOf ::  a, idOf :: Int}
              deriving (Eq, Show)
 
-data LIORef l a = LIORef l (IORef a) Int
+data LIORef l a = LIORef {labelOfRef :: l, _lioRefVal :: IORef a, lioRefInt :: Int}
 
 
-class LV t l where-- |tlv c-> v where
-  --getValue' :: tlv l c -> v
-  getLabel' :: t l a-> l
-  getId' :: t l a-> Int
+class LV t l where
+  getLabel' :: t l a -> l
+  getId'    :: t l a -> Int
 
 instance LV LIORef l  where
-  --getValue' (LIORef l ior i) = ior
-  getLabel' (LIORef l ior i) = l
-  getId' (LIORef l ior i) = i
+  getLabel'  = labelOfRef
+  getId'     = lioRefInt
 
 instance LV Labeled l  where
-  --getValue' (Lb l a i) = a
-  getLabel' (Lb l ior i) = l
-  getId' (Lb l ior i) = i
+  getLabel' = labelOf
+  getId'    = idOf 
 
+lioError :: MonadFail m => String -> m a
 lioError s = fail s
 
 
@@ -152,9 +129,7 @@ getState :: (Replaying r l st, Label l st r) => SLIO l st r st
 getState = scurr <$> get
 
 
-getNT :: (Replaying r l st, Label l st r) => SLIO l st r (HM.HashMap l [Int])
-getNT = ntlab <$> get 
-
+getAssocNT :: (Eq l, Hashable l, Monad m) => l -> Int -> StateT (LIOState l st r) m (HM.HashMap l [Int])
 getAssocNT l i = HM.lookupDefault HM.empty (l,i) .  assocnt <$> get
 
 getReplaying :: SLIO l st r r
@@ -163,21 +138,21 @@ getReplaying = rlab <$> get
 
 setState :: Label l st r => st -> SLIO l st r ()
 setState st = do 
-   state <- get 
-   when (any (incUpperSet (scurr state) st (lcurr state) (rlab state) (rlab state)) $ HM.keys (lcurr state))
+   s <- get 
+   when (any (incUpperSet (scurr s) st (lcurr s) (rlab s) (rlab s)) $ HM.keys (lcurr s))
          (lioError "incUpperClosure check failed")
-   put (state {scurr = st})
+   put (s {scurr = st})
 
 
 check :: Label l st r => st -> HM.HashMap l [Int] -> r -> l -> Bool
-check scurr lcurr rlab l = and [ lrt scurr lcurr rlab x l | x <- HM.keys lcurr ]
+check sc lc rl l = and [ lrt sc lc rl x l | x <- HM.keys lc ]
 
 guard :: (Replaying r l st, Label l st r) => l -> SLIO l st r ()
 guard l = do
-  lcurr <- getLabel
-  scurr <- getState
-  rlab  <- getReplaying
-  let checkPassed = check scurr lcurr rlab l
+  lc <- getLabel
+  sc <- getState
+  rl  <- getReplaying
+  let checkPassed = check sc lc rl l
   unless checkPassed (lioError "label check failed")
 
 io :: Label l st r => IO a -> SLIO l st r a
@@ -186,8 +161,8 @@ io = lift
 
 addAssocNt :: Label l st r => l -> Int -> SLIO l st r ()
 addAssocNt l i 
-  = modify $ \state ->
-              state {assocnt = HM.insertWith (HM.unionWith List.union) (l,i) (ntlab state) (assocnt state)}
+  = modify $ \s ->
+              s {assocnt = HM.insertWith (HM.unionWith List.union) (l,i) (ntlab s) (assocnt s)}
 
 label :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (Labeled l a)
 label l x = do
@@ -198,7 +173,7 @@ label l x = do
   return (Lb l x i)
 
 getNewId :: (Replaying r l st, Label l st r) => SLIO l st r Int
-getNewId = do modify $ \state -> state { newid = newid state + 1}
+getNewId = do modify $ \s -> s { newid = newid s + 1}
               newid <$> get
 
 
@@ -212,10 +187,7 @@ unlabel (Lb l x i) = do
     taint' nt
     return x
 
-valueOf :: Labeled l a -> a
-valueOf (Lb l x i) = x
-
-asNT :: (Replaying r l st, Label l st r, LV t l) => (t l a-> SLIO l st r a) -> t l a-> SLIO l st r a
+asNT :: (Replaying r l st, Label l st r, LV t l) => (t l a -> SLIO l st r a) -> t l a -> SLIO l st r a
 asNT f ld = do
   taintNT (getLabel' ld) (getId' ld)
   f ld
@@ -231,44 +203,35 @@ insert m k v = case HM.lookup k m of
   Just xs -> HM.insert k (nub $ v:xs) m
 
 taint :: (Replaying r l st, Label l st r) => l -> Int -> SLIO l st r ()
-taint l i = modify $ \state -> state { lcurr = insert (lcurr state) l i}
+taint l i = modify $ \s -> s { lcurr = insert (lcurr s) l i}
 
 taint' :: (Replaying r l st, Label l st r) => HM.HashMap l [Int] -> SLIO l st r ()
 taint' ls = 
-   modify $ \state -> state { lcurr = HM.unionWith List.union ls (lcurr state)}
+   modify $ \s -> s { lcurr = HM.unionWith List.union ls (lcurr s)}
 
 taintNT :: (Replaying r l st, Label l st r) => l -> Int -> SLIO l st r ()
 taintNT l i = 
   modify $ \s -> s { ntlab = insert (ntlab s) l i }
 
 
-taintNT' :: (Replaying r l st, Label l st r) => HM.HashMap l [Int] -> SLIO l st r ()
-taintNT' nt = 
-  modify $ \s -> s { ntlab = HM.unionWith List.union nt (ntlab s)}
 
-labelOf :: Labeled l a -> l
-labelOf (Lb l x _) = l
--- labelOf (NTLb l x _) = l
 
-idOf :: Labeled l a -> Int
-idOf (Lb   l x i) = i
--- idOf (NTLb l x i) = i
 
-relabel
-  :: (Replaying r l st, Label l st r)
-  => Labeled l a
-  -> l
-  -> SLIO l st r (Labeled l a)
+taintNT' :: (Monad m, HasNTLab l s, Eq l, Hashable l)
+         => HM.HashMap l [Int] -> StateT s m ()
+taintNT' nt = modify $ modifyNTLab (HM.unionWith List.union nt)
+
+relabel :: (Replaying r l st, Label l st r)
+        => Labeled l a
+        -> l
+        -> SLIO l st r (Labeled l a)
 relabel lblVal lbl = toLabeled lbl (unlabel lblVal)
 
-newLIORef
-  :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (LIORef l a)
+newLIORef :: (Replaying r l st, Label l st r) => l -> a -> SLIO l st r (LIORef l a)
 newLIORef l x = 
   do
   guard l
   enableRP l
-  --enablePromises l
-  nt <- getNT
   ref <- io $ newIORef x
   i <- getNewId
   addAssocNt l i
@@ -293,20 +256,18 @@ writeLIORef (LIORef l ref i) v = do
   io (writeIORef ref v)
 
 
-labelOfRef :: LIORef l a -> l
-labelOfRef (LIORef l ref i) = l
-
 -- what about replaying state in a toLabekled???
-toLabeled
-  :: (Replaying r l st, Label l st r)
-  => l
-  -> SLIO l st r a
-  -> SLIO l st r (Labeled l a)
+toLabeled :: Replaying r l st
+          => l
+          -> StateT (LIOState l st r) IO a
+          -> StateT (LIOState l st r) IO (Labeled l a)
 toLabeled l m = do 
-  s@(LIOState ll ss nt ant rr nid) <- get 
-  (x, s'@(LIOState lcurr scurr nt' ant' rlab newid)) <- lift (runStateT m s)
-  LIOState _ _ _ _ rlab' _ <- lift (execStateT (enableRP l) s')
-  let checkPassed =  check scurr lcurr rlab l
+  s1      <- get 
+  (x, s2) <- lift (runStateT m s1)
+  s3      <- lift (execStateT (enableRP l) s2)
+  let checkPassed =  check (scurr s2) (lcurr s2) (rlab s2) l
   unless checkPassed (lioError "label check failed")
-  put $ LIOState ll ss nt (HM.insertWith (HM.unionWith List.union) (l, newid) nt' ant') rlab' (newid+1)
-  return $ Lb l x newid
+  put $ s1 { assocnt = HM.insertWith (HM.unionWith List.union) (l, (newid s2)) (ntlab s2) (assocnt s2)
+           , rlab    = rlab s3
+           , newid   = newid s2+1 }
+  return $ Lb l x (newid s2)
