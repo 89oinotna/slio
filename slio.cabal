@@ -21,11 +21,22 @@ common common-options
     ghc-options:       -Wunused-packages
 
   default-language:    Haskell2010
+  build-depends:
+    base          >= 4.7     && < 6.0
+    ,containers
+    ,bytestring
+    ,bifunctors
+    ,hashable
+    ,text
+    ,unordered-containers == 0.2.19.1
+    -- , transformers == 0.5.6.2
+    , mtl == 2.2.2
 
 library
   import: common-options
   exposed-modules:
     SimpleStLIO
+    NTTSLIO
     -- DLM
   --  DCLabels.Core
   --  DCLabels.DSL
@@ -35,15 +46,7 @@ library
   hs-source-dirs:
     src
   --ghc-options:
-  build-depends:
-    base          >= 4.7     && < 6.0
-    ,containers
-    ,bytestring
-    ,bifunctors
-    ,hashable
-    ,text
-    ,unordered-containers == 0.2.19.1
-    , transformers == 0.5.6.2
+  
   default-language: Haskell2010
 
 
@@ -93,6 +96,7 @@ library
 --     ,slio
 --   default-language: Haskell2010
 test-suite rpproble
+  import: common-options
   type: exitcode-stdio-1.0
   main-is:  rpproble.hs
   hs-source-dirs:
@@ -113,7 +117,9 @@ test-suite rpproble
   default-language: Haskell2010
 
 test-suite timetransitive
+  import: common-options
   type: exitcode-stdio-1.0
+
   main-is:  TimeTransitive.hs
   hs-source-dirs:
     test/simple,
@@ -184,6 +190,7 @@ test-suite rptt
 
 
 test-suite direct
+  import: common-options
   type: exitcode-stdio-1.0
   main-is:  DirectRelease.hs
   hs-source-dirs:
@@ -205,6 +212,7 @@ test-suite direct
 
 
 test-suite whitelisting
+  import: common-options
   type: exitcode-stdio-1.0
   main-is:  Whitelisting.hs
   hs-source-dirs:

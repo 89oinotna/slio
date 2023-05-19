@@ -28,6 +28,7 @@ import           Data.Map                       ( elems
                                                 , empty
                                                 , lookup
                                                 )
+import Control.Monad.State.Class
 import           SimpleStLIOUtil
 
 newtype User = User String
@@ -54,32 +55,25 @@ insert m k v = case HM.lookup k m of
 
 instance Replaying Rep User Rel where
   --addPromises :: l -> Int -> [l] -> SLIO l st r ()
-  addPromises l i lst = SLIO
-    (\s@(LIOState lcurr st nt assocnt (Rep rl) id) ->
-      let genl = List.map (l, i, , False) lst
-      in
-        let
-          nrl = case HM.lookup l rl of
+  addPromises l i lst = do
+    s@(LIOState lcurr st nt assocnt (Rep rl) id) <- get
+    let genl = List.map (l, i, , False) lst 
+    let nrl = case HM.lookup l rl of
             Nothing -> insert rl l genl
             Just ls -> insert
               rl
               l
               (List.filter (\(l1, i, l2, _) -> (l1, i, l2, True) `notElem` ls)
                            genl
-              )
-        in 
-      --let lst' = List.map (l, i, , False) lst in
-            return ((), LIOState lcurr st nt assocnt (Rep nrl) id)
-    )
-
-
+              ) 
+    put (LIOState lcurr st nt assocnt (Rep nrl) id)
+    
+    
   -- replay everything in lcurr that has a promise for l
-  enableRP l = SLIO
-    (\s@(LIOState lcurr st nt assocnt (Rep rl) id) ->
-      let ls = HM.keys lcurr
-      in
-        let
-          nrl = HM.mapMaybeWithKey
+  enableRP l =  do
+    s@(LIOState lcurr st nt assocnt (Rep rl) id) <- get
+    let ls = HM.keys lcurr
+    let nrl = HM.mapMaybeWithKey
             (\k lst -> Just
               (List.map
                 (\v@(l1, i, l2, b) ->
@@ -89,26 +83,23 @@ instance Replaying Rep User Rel where
               )
             )
             rl
-        in  traceShow ("post" ++ show nrl)
-                      return
-                      ((), LIOState lcurr st nt assocnt (Rep nrl) id)
-    )
+        -- in  traceShow ("post" ++ show nrl)
+    put (LIOState lcurr st nt assocnt (Rep nrl) id)
+    
 
-  disableRP l i = SLIO
-    (\s@(LIOState lcurr st nt assocnt (Rep rl) id) ->
-      let
-        newrl =
-          (HM.mapMaybeWithKey
+  disableRP l i =  do
+    s@(LIOState lcurr st nt assocnt (Rep rl) id) <- get
+    let newrl = 
+            HM.mapMaybeWithKey
               -- (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
             (\k lst -> Just
               (List.filter (\v@(l1, i1, l2, b) -> l1 /= l && i /= i1) lst)
             )
             rl
-          )
-      in  traceShow ("post" ++ show newrl)
-                    return
-                    ((), LIOState lcurr st nt assocnt (Rep newrl) id)
-    )
+          
+      -- in  traceShow ("post" ++ show newrl)
+    put (LIOState lcurr st nt assocnt (Rep newrl) id)
+    
 
 
 instance Label User Rel Rep where
