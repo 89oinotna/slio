@@ -3,5 +3,8 @@ cradle:
     - path: "src"
       component: "lib:slio"
 
-    - path: "test"
-      component: "slio:test:simple:replaying"
+    - path: "test/trans"
+      component: "slio:test:impl"
+
+    - path: "src"
+      component: "slio:test:impl"
