@@ -18,7 +18,7 @@ module IFC
   , HasLSet(..)
   , HasLVIds(..)
 --   , HasRelation(..)
-  ,HasScurr(..)
+  , HasScurr(..)
   , ToRelation(..)
   , Relation(..)
   , MutableRelation(..)
@@ -30,7 +30,11 @@ module IFC
 
 
 -- import Control.Monad.Trans.State.Strict
-import           Control.Monad.State.Strict hiding (guard, get, put)
+import           Control.Monad.State.Strict
+                                         hiding ( get
+                                                , guard
+                                                , put
+                                                )
 
 --import Data.Biapplicative
 
@@ -38,13 +42,9 @@ import           Prelude                 hiding ( fail )
 
 -- import           Debug.Trace                    ( traceShow )
 import qualified Data.HashMap.Strict           as HM
+import           Data.HashSet
 import           Data.Hashable
-import           Data.IORef                     ( IORef
-                                                
-                                                
-                                                
-                                                )
-import Data.HashSet
+import           Data.IORef                     ( IORef )
 
 
 class HasLSet st l | st -> l where
@@ -73,20 +73,23 @@ class (Eq l, Show l, Hashable l) => Relation rel l where
 class Relation rel l => MutableRelation rel l where
   incUpperSet :: rel l -> rel l -> l -> Bool
   incUpperSet oldRel newRel l=any (\el -> not (lrt oldRel l el) &&  lrt newRel l el) (getElements newRel)
+  union :: rel l -> rel l -> rel l
 
-class Relation rel l => ToRelation scurr rel l | scurr -> rel l where
-    toRelation :: scurr -> rel l
+class Relation rel l => ToRelation state rel l | state -> rel l where
+    toRelation :: state -> rel l
 
 class -- (MonadState (st rel l) m, 
     -- (HasRelation st rel l, 
     (HasScurr (st scurr l) scurr,
-    MutableRelation rel l, HasLSet (st scurr l) l, 
+    MutableRelation rel l, HasLSet (st scurr l) l,
     HasLVIds (st scurr l), MonadFail m, MonadIO m,
     ToRelation scurr rel l
-    ) 
+    )
     => MonadIFC st scurr rel l m | m -> st scurr l where
-  
+
   label ::  l -> a -> m (Labeled l a)
+
+  labelInternal :: l -> a -> m (Labeled l a)
 
   unlabel ::  Labeled l a -> m a
 
@@ -95,13 +98,14 @@ class -- (MonadState (st rel l) m,
   setUserState ::  scurr -> m ()
 
   getRelation ::  m (rel l)
-  
+
   toLabeled ::  l -> m a -> m (Labeled l a)
-  resetOP :: m (m ())
   
+  resetOP :: m (m ())
+
   -- User must not use those functions
   get :: m (st scurr l)
-  put :: (st scurr l) -> m ()
+  put :: st scurr l -> m ()
   modify :: (st scurr l -> st scurr l) -> m ()
 
 

@@ -3,8 +3,26 @@ cradle:
     - path: "src"
       component: "lib:slio"
 
-    - path: "test/trans"
-      component: "slio:test:impl"
+    - path: "test"
+      component: "slio:test:test-melody"
 
     - path: "src"
-      component: "slio:test:impl"
+      component: "slio:test:test-melody"
+
+    - path: "test/trans"
+      component: "slio:test:nttrans"
+
+    - path: "src"
+      component: "slio:test:nttrans"
+
+    - path: "test/trans"
+      component: "slio:test:rptrans"
+
+    - path: "src"
+      component: "slio:test:rptrans"
+
+    - path: "test/trans"
+      component: "slio:test:ntrptrans"
+
+    - path: "src"
+      component: "slio:test:ntrptrans"

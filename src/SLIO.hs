@@ -25,8 +25,13 @@ module SLIO
 
 
 -- import Control.Monad.Trans.State.Strict
-import qualified Control.Monad.State.Class as State
-import Control.Monad.State.Strict hiding (guard, get, put, modify)
+import qualified Control.Monad.State.Class     as State
+import           Control.Monad.State.Strict
+                                         hiding ( get
+                                                , guard
+                                                , modify
+                                                , put
+                                                )
 
 --import Data.Biapplicative
 import           Control.Applicative
@@ -50,14 +55,14 @@ type SLIO l scurr io a = StateT (SLIOState scurr l) io a
 
 instance HasScurr (SLIOState scurr l) scurr  where
   getScurr = scurr
-  setScurr sc s = s {scurr = sc}
+  setScurr sc s = s { scurr = sc }
   -- modifyScCurr :: (scurr -> scurr) -> st -> st
   -- modifyScCurr m st = setScCurr (m (getScCurr st)) st
 
 
 instance HasLSet (SLIOState rel l) l where
-  getLSet =lset
-  setLSet ls s=  s {lset = ls}
+  getLSet = lset
+  setLSet ls s = s { lset = ls }
 
 instance HasLVIds (SLIOState rel l) where
   getId = newid
@@ -69,23 +74,26 @@ instance HasLVIds (SLIOState rel l) where
 --   setRel rel st = st { scurr = rel }
 
 
-instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l, 
+instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
       HasScurr (SLIOState scurr l) scurr, ToRelation scurr rel l,
-  HasLVIds (SLIOState scurr l), MonadFail (StateT (SLIOState scurr l) io)) 
+  HasLVIds (SLIOState scurr l), MonadFail (StateT (SLIOState scurr l) io))
   => MonadIFC SLIOState scurr rel l (StateT (SLIOState scurr l) io) where
-  label l a = guard l>> incAndGetId >>= return . (Lb l a)
+  label l a = guard l >> labelInternal l a
+  labelInternal l a = incAndGetId >>= return . (Lb l a)
   unlabel (Lb l a i) = taint l i >> return a
   guard l = do
-    lc <- getLSet <$> get
+    lc  <- getLSet <$> get
     rel <- getRelation
     let checkPassed = and [ lrt rel x l | x <- HM.keys lc ]
     unless checkPassed (fail "label check failed")
   setUserState newState = do
-        s <- get
-        when ( any (incUpperSet (toRelation $ getScurr s) (toRelation newState) )
-                $ HM.keys (getLSet s)
-            ) (fail "incUpperClosure check failed")
-        State.put $ setScurr newState s
+    s <- get
+    when
+      ( any (incUpperSet (toRelation $ getScurr s) (toRelation newState))
+      $ HM.keys (getLSet s)
+      )
+      (fail "incUpperClosure check failed")
+    State.put $ setScurr newState s
   getRelation = toRelation . getScurr <$> get
   -- toLabeled l m = do
   --   s1  <- get
@@ -94,36 +102,41 @@ instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
   --   id <- incAndGetId
   --   put $ setId id s1
   --   return $ Lb l x id
-  get = State.get
-  put = State.put 
-  modify = State.modify
-  resetOP = do
+  get         = State.get
+  put         = State.put
+  modify      = State.modify
+  resetOP     = do
     s <- get
-    return (do
+    return
+      (do
         ns <- get
         put $ setId (getId ns) s
       )
   -- toLabeledOP l x = do
-    
+
   toLabeled l m = do
-    rop  <- resetOP
-    x <- m
-    guard l
-    lv <- label l x
+    rop <- resetOP
+    x   <- m
+    -- guard l
+    lv  <- label l x
     rop
     return lv
 
     -- id <- incAndGetId
     -- return $ Lb l x id
 
-incAndGetId :: (Monad m, HasLVIds (st scurr l), MonadIFC st scurr rel l m) => m Int
+incAndGetId
+  :: (Monad m, HasLVIds (st scurr l), MonadIFC st scurr rel l m) => m Int
 incAndGetId = do
   s <- get
   modify incId
   return $ getId s
 
 taint
-  :: (Eq l, Hashable l, HasLSet (st scurr l) l, MonadIFC st scurr rel l m) => l -> Int -> m ()
+  :: (Eq l, Hashable l, HasLSet (st scurr l) l, MonadIFC st scurr rel l m)
+  => l
+  -> Int
+  -> m ()
 taint l i = modify $ modifyLSet (insert l i)
 
 insert

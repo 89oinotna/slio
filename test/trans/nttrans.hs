@@ -35,9 +35,8 @@ newtype User = User String
 newtype Rel l= Rel [(l, l)] deriving (Show )
 
 instance Relation Rel User where
-    lrt (Rel rel) l1 l2 = (l1, l2) `elem` s
-        where
-            s = reflTransClosure rel
+    lrt (Rel rel) l1 l2 = (l1, l2) `elem` rel
+        
     getElements (Rel rel)= fromList $ concat $ map (\(l1, l2) -> [l1,l2]) rel
 
 instance Relation Rel User => MutableRelation Rel User where
@@ -46,7 +45,8 @@ instance Relation Rel User => MutableRelation Rel User where
 --     getScurr = scurr
 
 instance Relation Rel l => ToRelation (Rel l) Rel l where
-    toRelation = id
+    toRelation (Rel r)= Rel $ reflTransClosure r
+
 
 initState :: SLIOState (Rel User) User
 initState = SLIOState { lset = HM.empty
@@ -58,8 +58,6 @@ initNTTState = NTTState {
                      ntlab = HM.empty
                      , assocnt = HM.empty
   }
-
-
 
 disallowIS :: (MonadIFC st (Rel User) Rel User m) => m ()  --SLIO User Rel Rep ()
 disallowIS = do
@@ -97,10 +95,10 @@ timetransitive2 = do
     x <- escape input
     disallowIS
     allowSD
-    unlabel x
-    -- db <- toLabeled (User "DB") (unlabel x)
+    -- unlabel x
+    db <- toLabeled (User "DB") (unlabel x)
 --    xx <- unlabel x
-    -- unlabel db
+    unlabel db
 
 main :: IO ()
 main = do

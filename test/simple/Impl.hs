@@ -53,10 +53,11 @@ insert m k v = case HM.lookup k m of
   Just xs -> HM.insert k (nub $ v ++ xs) m
 
 
+
 instance Replaying Rep User Rel where
   --addPromises :: l -> Int -> [l] -> SLIO l st r ()
   addPromises l i lst = do
-    s@(LIOState lcurr st nt assocnt (Rep rl) id) <- get
+    s@(LIOState _ _ _ _ (Rep rl) _) <- get
     let genl = List.map (l, i, , False) lst 
     let nrl = case HM.lookup l rl of
             Nothing -> insert rl l genl
@@ -66,7 +67,7 @@ instance Replaying Rep User Rel where
               (List.filter (\(l1, i, l2, _) -> (l1, i, l2, True) `notElem` ls)
                            genl
               ) 
-    put (LIOState lcurr st nt assocnt (Rep nrl) id)
+    put s {rp = Rep nrl} -- (LIOState lcurr st nt assocnt (Rep nrl) id)
     
     
   -- replay everything in lcurr that has a promise for l

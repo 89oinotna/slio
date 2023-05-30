@@ -11,22 +11,26 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module RP 
-    where
+module RP where
 
 
 
-import qualified Control.Monad.State.Class as State
-import Control.Monad.State.Strict hiding (guard, get, put, modify)
+import qualified Control.Monad.State.Class     as State
+import           Control.Monad.State.Strict
+                                         hiding ( get
+                                                , guard
+                                                , modify
+                                                , put
+                                                )
 
 import           Control.Applicative
 import           Prelude                 hiding ( fail )
 
-import Data.List ( nub )
-import qualified Data.List as List
-import qualified Data.HashMap.Strict as HM
-import Data.Hashable
-import IFC
+import qualified Data.HashMap.Strict           as HM
+import           Data.Hashable
+import           Data.List                      ( nub )
+import qualified Data.List                     as List
+import           IFC
 
 -- the bool in rlab tracks the fact that a global unlabel has been done
 -- the guard has to check that any info in the computation (unlabeled) can flow to the label 
@@ -40,64 +44,156 @@ import IFC
 --   getRP :: st -> r
 --   setRP :: r -> st -> st
 --   modifyRP :: (r -> r) -> st -> st
---   modifyRP m st = setRLab (m (getRLab st)) st
+--   modifyRP m st = setRP (m (getRP st)) st
 
 -- instance HasRP (RPState r l) r l where
 --   getRP = rp
 --   setRP rl s = s { rp = rl }
-newtype RPState l = RPState {r::HM.HashMap l [(l, Int, l, Bool)] }
 
-class (Monad m) => MonadRP rp l m | m -> rp l where
+newtype RPState l = RPState {r::(HM.HashMap l [Int], HM.HashMap l [(l, Int, l, Bool)]) } 
+    deriving Show
+
+
+
+
+class (Monad m, ToRelation rp rel l) => MonadRP rp l rel m | m -> rp l where
   asRP :: LV t l
     => (t l a -> m a)
-    -> t l a
     -> [l]
+    -> t l a
     -> m a
   getRPState :: m rp
   putRPState :: rp -> m ()
   modifyRPState :: (rp -> rp) -> m ()
+  getRPRelation :: m (rel l)
 
-instance (Monad m) => MonadRP (RPState l)  l (StateT (RPState l) m) where
-  asRP f ld lst = do
+instance (Monad m, ToRelation (RPState l) rel l) => MonadRP (RPState l)  l rel (StateT (RPState l) m) where
+  asRP f lst ld = do
     addPromises (getLabel' ld) (getId' ld) lst
     f ld
-  getRPState = State.get
-  putRPState = State.put
+  getRPState    = State.get
+  putRPState    = State.put
   modifyRPState = State.modify
+  getRPRelation = toRelation <$> State.get
 
-instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l (StateT (RPState l) m))
+instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState l) m))
   => MonadIFC st scurr rel l (StateT (RPState l) m) where
-  label l a = do 
-              x <- lift (label l a) 
-              enableRP l
-              return x--guard l>> incAndGetId >>= return . (Lb l a)
-  unlabel lv@(Lb l _ i) = lift $ unlabel lv -- taint l i >> return a
-  guard l = lift $ guard l
-  
-  getRelation = lift getRelation -- getRel <$> (lift get)
+  label l a = guard l >> labelInternal l a--guard l>> incAndGetId >>= return . (Lb l a)
+  labelInternal l a = do
+    x <- lift $ labelInternal l a
+    enableRP l
+    return x
+    
+  unlabel lv@(Lb l _ i) = do
+    x <- lift $ unlabel lv -- taint l i >> return a
+    s <- get
+    RPState (_, rp) <- getRPState
+    putRPState $ RPState (getLSet s, rp)
+    return x
 
-  toLabeled l m = do
-    x <- m
-    label l x
-  get = lift get
-  put = lift . put
-  modify = lift . modify
+  guard l = do
+    lc  <- getLSet <$> get
+    rel <- getRelation
+    let checkPassed = and [ lrt rel x l | x <- HM.keys lc ]
+    unless checkPassed (fail "label check failed")
+
+
+  getRelation = do
+    rprel <- getRPRelation
+    rel   <- lift getRelation
+    return (rprel `union` rel) -- getRel <$> (lift get)
+
+  get    = lift get
+  put  s  = do
+    RPState (_, rp) <- getRPState
+    putRPState $ RPState (getLSet s, rp)
+    lift $ put s
+  modify s= do
+    lift $ modify s
+    lset <- getLSet <$> get
+    RPState (_, rp) <- getRPState
+    putRPState $ RPState (lset, rp)
   setUserState scurr = do
     oldRel <- getRelation
-    s <- get
+    s      <- get
     put $ setScurr scurr s
     newRel <- getRelation
-    when ( any (incUpperSet (oldRel) (newRel) )
-                $ HM.keys (getLSet s)
-            ) (fail "incUpperClosure check failed")
-    
+    when (any (incUpperSet (oldRel) (newRel)) $ HM.keys (getLSet s))
+         (fail "incUpperClosure check failed")
+  resetOP = do
+    rs <- lift resetOP
+    return
+      (do
+        lift rs
+        s <- get
+        RPState (_, rp) <- getRPState
+        putRPState $ RPState (getLSet s, rp)
+        )
+  toLabeled l m = do
+    rop <- resetOP
+    x   <- m
+    lv  <- label l x
+    rop
+    return lv
+
 
 
 
 insert
-  :: (Hashable k, Eq a, Eq k) => k -> a -> HM.HashMap k [a] -> HM.HashMap k [a]
-insert k v m = case HM.lookup k m of
-  Nothing -> HM.insert k [v] m
-  Just xs -> HM.insert k (nub $ v : xs) m
-    
+  :: (Hashable k, Eq a, Eq k)
+  => HM.HashMap k [a]
+  -> k
+  -> [a]
+  -> HM.HashMap k [a]
+insert m k v = case HM.lookup k m of
+  Nothing -> HM.insert k v m
+  Just xs -> HM.insert k (nub $ v ++ xs) m
+
+
+addPromises :: MonadRP (RPState l)  l rel m=> l -> Int -> [l] -> m ()
+addPromises l i lst = do
+    RPState (lset, rp) <- getRPState
+    let genl = List.map (l, i, , False) lst 
+    let nrl = case HM.lookup l rp of
+            Nothing -> insert rp l genl
+            Just ls -> insert
+              rp
+              l
+              (List.filter (\(l1, i, l2, _) -> (l1, i, l2, True) `notElem` ls)
+                           genl
+              ) 
+    putRPState $ RPState (lset, nrl)
+
+enableRP    :: MonadRP (RPState l) l rel m => l  -> m () 
+enableRP l = do
+    RPState (lset, rp) <- getRPState
+    let ls = HM.keys lset
+    let nrl = HM.mapMaybeWithKey
+            (\k lst -> Just
+              (List.map
+                (\v@(l1, i, l2, b) ->
+                  if l2 == l && l1 `elem` ls then (l1, i, l2, True) else v
+                )
+                lst
+              )
+            )
+            rp
+        -- in  traceShow ("post" ++ show nrl)
+    --put (LIOState lcurr st nt assocnt (Rep nrl) id)
+    putRPState $ RPState (lset, nrl)
+
+
+disableRP   ::MonadRP (RPState l)  l rel m=> l -> Int -> m ()
+disableRP l i =  do
+    RPState (lset, rp) <- getRPState
+    let newrl = 
+            HM.mapMaybeWithKey
+              -- (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
+            (\k lst -> Just
+              (List.filter (\v@(l1, i1, l2, b) -> l1 /= l && i /= i1) lst)
+            )
+            rp
+          
+      -- in  traceShow ("post" ++ show newrl)
+    putRPState $ RPState (lset, newrl)
 
