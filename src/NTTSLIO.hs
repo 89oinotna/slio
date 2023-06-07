@@ -82,7 +82,7 @@ instance (MonadIFC st scurr rel l m, MonadNTT (NTTState l) l (StateT (NTTState l
               --guard l>> incAndGetId >>= return . (Lb l a)
   labelInternal l a = do
     x <- lift (labelInternal l a)
-    addAssocNt x
+    addAssocNt (getLabel' x) (getId' x)
     return x
   unlabel lv@(Lb l _ i) = do
     nt <- HM.lookupDefault HM.empty (l, i) . getNTAssoc <$> State.get
@@ -126,14 +126,34 @@ instance (MonadIFC st scurr rel l m, MonadNTT (NTTState l) l (StateT (NTTState l
     rop
     return lv
 
+  newIORefInternal l a = do
+    x <- lift $ newIORefInternal l a
+    addAssocNt (getLabel' x) (getId' x)
+    return x
+
+  newIORef l a = guard l >> newIORefInternal l a
+  readIORef lv = do
+      nt <- HM.lookupDefault HM.empty (getLabel' lv, getId' lv) . getNTAssoc <$> State.get
+      State.modify $ modifyNTLab (HM.unionWith List.union nt)
+      lift $ modify $ modifyLSet (HM.unionWith List.union nt)
+      lift $ readIORef lv
+
+  writeIORef lv b = guard (getLabel' lv) >> writeIORefInternal lv b
+  
+  writeIORefInternal lv b = do
+      nt <- HM.lookupDefault HM.empty (getLabel' lv, getId' lv) . getNTAssoc <$> State.get
+      State.modify $ modifyNTLab (HM.unionWith List.union nt)
+      lift $ modify $ modifyLSet (HM.unionWith List.union nt)
+      lift $ writeIORefInternal lv b
+
 
 taintNT :: (Eq l, Hashable l, HasNT nt l, MonadNTT nt l m) => l -> Int -> m ()
 taintNT l i = modifyNTState $ modifyNTLab (insert l i)
 
-addAssocNt :: (HasNT nt l, Monad m, LV t l, MonadNTT nt l m) => t l a -> m ()
-addAssocNt lv = modifyNTState $ \s -> modifyNTAssoc
+addAssocNt :: (HasNT nt l, Monad m, MonadNTT nt l m) => l -> Int -> m ()
+addAssocNt l i = modifyNTState $ \s -> modifyNTAssoc
   (HM.insertWith (HM.unionWith List.union)
-                 (getLabel' lv, getId' lv)
+                 (l, i)
                  (getNTLab s)
   )
   s

@@ -43,6 +43,7 @@ import qualified Data.HashMap.Strict           as HM
 import           Data.Hashable
 import           Data.List                      ( nub )
 import           IFC
+import Data.IORef (readIORef, newIORef, writeIORef)
 
 data SLIOState scurr l = SLIOState
   { lset  :: HM.HashMap l [Int]
@@ -112,7 +113,7 @@ instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
         ns <- get
         put $ setId (getId ns) s
       )
-  -- toLabeledOP l x = do
+
 
   toLabeled l m = do
     rop <- resetOP
@@ -122,8 +123,18 @@ instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
     rop
     return lv
 
-    -- id <- incAndGetId
-    -- return $ Lb l x id
+  readIORef (LIORef l a i) = taint l i >> liftIO (Data.IORef.readIORef a)
+
+  newIORef l a = guard l >> newIORefInternal l a
+
+  newIORefInternal l a = do
+    i <- incAndGetId
+    ref <- liftIO (Data.IORef.newIORef a) 
+    return (LIORef l ref i)
+
+  writeIORef lv@(LIORef l a i) b = guard l >> writeIORefInternal lv b
+
+  writeIORefInternal (LIORef l a i) b = liftIO (Data.IORef.writeIORef a b)
 
 incAndGetId
   :: (Monad m, HasLVIds (st scurr l), MonadIFC st scurr rel l m) => m Int

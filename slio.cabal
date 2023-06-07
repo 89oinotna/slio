@@ -23,7 +23,7 @@ common common-options
   default-language:    Haskell2010
   build-depends:
     base          >= 4.7     && < 6.0
-    ,containers
+    -- ,containers
     -- ,bytestring
     -- ,bifunctors
     ,hashable
@@ -40,6 +40,7 @@ library
     NTTSLIO
     RP
     SLIO
+    NWL
     IFC
     -- DLM
   --  DCLabels.Core
@@ -57,61 +58,100 @@ test-suite test-melody
   import: common-options
   type:               exitcode-stdio-1.0
   main-is:            Main.hs
-  hs-source-dirs:     test, src
+  hs-source-dirs:     test, src, test/trans
   build-depends:      test-framework,
                       test-framework-hunit,
                       HUnit,
+                      transformers
+  other-modules: IFC
+                 NTTSLIO
+                 NWL
+                 RP
+                 SLIO
+                 SimpleStLIOUtil
+                 WLTrans
+                 NTRPTrans
 
-test-suite nttrans
-  import: common-options
-  type: exitcode-stdio-1.0
-  main-is:  nttrans.hs
-  hs-source-dirs:
-    test/trans,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  other-modules: IFC NTTSLIO SLIO
-  build-depends:
-    ,slio
-    -- , transformers 
-  other-modules:
-    -- SimpleStLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite nttrans
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  nttrans.hs
+--   hs-source-dirs:
+--     test/trans,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     ,slio
+--     -- , transformers 
+--   other-modules:
+--     -- SimpleStLIO,
+--     NTTSLIO,
+--     IFC,
+--     SLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
 
-test-suite rptrans
-  import: common-options
-  type: exitcode-stdio-1.0
-  main-is:  rptrans.hs
-  hs-source-dirs:
-    test/trans,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  other-modules: IFC NTTSLIO SLIO
-  build-depends:
-    ,slio
-    -- , transformers 
-  other-modules:
-    -- SimpleStLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite rptrans
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  rptrans.hs
+--   hs-source-dirs:
+--     test/trans,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     ,slio
+--     -- , transformers 
+--   other-modules:
+--     -- SimpleStLIO,
+--     RP,
+--     IFC,
+--     SLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
 
-test-suite ntrptrans
-  import: common-options
-  type: exitcode-stdio-1.0
-  main-is:  ntrptrans.hs
-  hs-source-dirs:
-    test/trans,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  other-modules: IFC NTTSLIO SLIO
-  build-depends:
-    ,slio
-    , transformers 
-  other-modules:
-    -- SimpleStLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite wltrans
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  wltrans.hs
+--   hs-source-dirs:
+--     test/trans,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     ,slio
+--     , transformers 
+--   other-modules:
+--     SimpleStLIO,
+--     RP,
+--     IFC,
+--     SLIO,
+--     NWL,
+--     NTTSLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
+
+-- test-suite ntrptrans
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  ntrptrans.hs
+--   hs-source-dirs:
+--     test/trans,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   other-modules: IFC NTTSLIO SLIO
+--   build-depends:
+--     ,slio
+--     , transformers 
+--   other-modules:
+--     -- SimpleStLIO,
+--     RP,
+--     IFC,
+--     SLIO,
+--     NTTSLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
+
 -- -- test-suite dlmtest
 -- --   type: exitcode-stdio-1.0
 -- --   main-is:  DLMExample.hs

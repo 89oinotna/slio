@@ -89,6 +89,8 @@ class -- (MonadState (st rel l) m,
 
   label ::  l -> a -> m (Labeled l a)
 
+
+
   labelInternal :: l -> a -> m (Labeled l a)
 
   unlabel ::  Labeled l a -> m a
@@ -102,6 +104,16 @@ class -- (MonadState (st rel l) m,
   toLabeled ::  l -> m a -> m (Labeled l a)
   
   resetOP :: m (m ())
+
+  readIORef ::  LIORef l a -> m a
+
+  writeIORef ::  LIORef l a -> a -> m ()
+
+  newIORef ::  l -> a -> m (LIORef l a)
+
+  newIORefInternal ::  l -> a -> m (LIORef l a)
+
+  writeIORefInternal ::  LIORef l a -> a -> m ()
 
   -- User must not use those functions
   get :: m (st scurr l)

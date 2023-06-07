@@ -10,6 +10,9 @@ cradle:
       component: "slio:test:test-melody"
 
     - path: "test/trans"
+      component: "slio:test:test-melody"
+
+    - path: "test/trans"
       component: "slio:test:nttrans"
 
     - path: "src"

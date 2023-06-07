@@ -71,13 +71,6 @@ instance Relation Rel l => ToRelation (RPState l) Rel l where
       , all (all (\i -> elem (l1, i, l2, True) (HM.lookupDefault [] l1 rp)))
         $ HM.lookup l1 rplset
       ]
-      -- elems = 
-      -- rel = [(l1, l2) | ]
-      -- checkRep = case HM.lookup lbl1 nrlab of
-      -- Nothing    -> False
-      -- Just rplTo -> case HM.lookup lbl1 lset of
-      --   Nothing  -> False
-      --   Just lst -> all (\i -> (lbl1, i, lbl2, True) `elem` rplTo) lst --for all the ids there is the flow
 
 initState :: SLIOState (Rel User) User
 initState = SLIOState

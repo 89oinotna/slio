@@ -14,12 +14,13 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use infix" #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Main
-  ( main
-  ) where
+module NTRPTrans 
+(run, ntrp) where
+-- module Main
+--   ( main
+--   ) where
 
 
-import Control.Monad.Trans.Maybe
 import           Control.Monad.State.Strict
                                          hiding ( get
                                                 , guard
@@ -42,7 +43,7 @@ import           RP
 import           SLIO
 import NTTSLIO
 import           SimpleStLIOUtil
-import IFC (MonadIFC)
+
 
 newtype User = User String
   deriving (Eq, Show, Hashable)
@@ -123,24 +124,29 @@ allowNM = do
 
 
 
-rptt :: (MonadIFC st (Rel User) Rel User m, MonadRP rp User Rel m, MonadNTT (nt User) User m) => m Integer
-rptt = do
+ntrp :: (MonadIFC st (Rel User) Rel User m, MonadRP rp User Rel m, MonadNTT (nt User) User m) => m Integer
+ntrp = do
   file <- label (User "NSA") 0
   x <- toLabeled (User "Military") $ do
                 --   asRP unlabel [User "Military"] file
-                --   asRP (asNT unlabel) [User "Military"] file
-                  asNT unlabel file
+                  asRP (asNT unlabel) [User "Military"] file
+                  -- asNT unlabel file
   disallowNM
   allowMB
   unlabel x
   b <- toLabeled (User "Bob") (unlabel file)
   unlabel b
 
-main :: IO ()
-main = do
-  (r, s) <-  runStateT (runStateT (runStateT rptt initNTTState) initRPState) initState -- (runMaybeT rptt)
+run act =do
+  (r, s) <-  runStateT (runStateT (runStateT act initNTTState) initRPState) initState -- (runMaybeT rptt)
   print r
-  print s
+  print s 
+
+-- main :: IO ()
+-- main = do
+--   (r, s) <-  runStateT (runStateT (runStateT rptt initNTTState) initRPState) initState -- (runMaybeT rptt)
+--   print r
+--   print s
 
 instance  (MonadRP rp l rel m, MonadNTT (NTTState l)  l (StateT (NTTState l) m))
   => MonadRP rp l rel (StateT (NTTState l) m) where

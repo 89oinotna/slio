@@ -1,17 +1,23 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TupleSections          #-}
 
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE PolyKinds              #-}
 
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE TypeFamilies           #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-module RP where
+{-# LANGUAGE AllowAmbiguousTypes    #-}
+{-# LANGUAGE InstanceSigs           #-}
+{-# LANGUAGE UndecidableInstances   #-}
+module RP (
+  RPState(..),
+  MonadRP(..),
+  disableRP,
+  enableRP,
+  addPromises 
+) where
 
 
 
@@ -33,7 +39,7 @@ import qualified Data.List                     as List
 import           IFC
 
 -- the bool in rlab tracks the fact that a global unlabel has been done
--- the guard has to check that any info in the computation (unlabeled) can flow to the label 
+-- the guard has to check that any info in the computation (unlabeled) can flow to the label
 -- we can replay information only if there wasnt any global unlabeling or if all of the replaying (all the ids from 0 to current) can flow to the label
 -- newtype RPState r l = RPState { rp :: r }--, ids :: Map String Int }
 --   deriving Show
@@ -50,7 +56,7 @@ import           IFC
 --   getRP = rp
 --   setRP rl s = s { rp = rl }
 
-newtype RPState l = RPState {r::(HM.HashMap l [Int], HM.HashMap l [(l, Int, l, Bool)]) } 
+newtype RPState l = RPState {r::(HM.HashMap l [Int], HM.HashMap l [(l, Int, l, Bool)]) }
     deriving Show
 
 
@@ -83,10 +89,10 @@ instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState 
     x <- lift $ labelInternal l a
     enableRP l
     return x
-    
-  unlabel lv@(Lb l _ i) = do
-    x <- lift $ unlabel lv -- taint l i >> return a
-    s <- get
+
+  unlabel lv = do
+    x               <- lift $ unlabel lv -- taint l i >> return a
+    s               <- get
     RPState (_, rp) <- getRPState
     putRPState $ RPState (getLSet s, rp)
     return x
@@ -95,7 +101,7 @@ instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState 
     lc  <- getLSet <$> get
     rel <- getRelation
     let checkPassed = and [ lrt rel x l | x <- HM.keys lc ]
-    unless checkPassed (fail "label check failed")
+    unless checkPassed (fail "rp label check failed")
 
 
   getRelation = do
@@ -103,14 +109,14 @@ instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState 
     rel   <- lift getRelation
     return (rprel `union` rel) -- getRel <$> (lift get)
 
-  get    = lift get
-  put  s  = do
+  get = lift get
+  put s = do
     RPState (_, rp) <- getRPState
     putRPState $ RPState (getLSet s, rp)
     lift $ put s
-  modify s= do
+  modify s = do
     lift $ modify s
-    lset <- getLSet <$> get
+    lset            <- getLSet <$> get
     RPState (_, rp) <- getRPState
     putRPState $ RPState (lset, rp)
   setUserState scurr = do
@@ -125,10 +131,10 @@ instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState 
     return
       (do
         lift rs
-        s <- get
+        s               <- get
         RPState (_, rp) <- getRPState
         putRPState $ RPState (getLSet s, rp)
-        )
+      )
   toLabeled l m = do
     rop <- resetOP
     x   <- m
@@ -136,6 +142,28 @@ instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState 
     rop
     return lv
 
+  newIORefInternal l a =  do
+    x <- lift $ newIORefInternal l a
+    enableRP l
+    return x
+
+  newIORef l a = guard l >> newIORefInternal l a
+  
+  writeIORefInternal lv@(LIORef l a i) b = do
+    x <- lift $ writeIORefInternal lv b
+    disableRP l i
+    return x
+
+  writeIORef lv b = do
+    guard (getLabel' lv)
+    writeIORefInternal lv b
+  
+  readIORef lv = do
+    x               <- lift $ readIORef lv -- taint l i >> return a
+    s               <- get
+    RPState (_, rp) <- getRPState
+    putRPState $ RPState (getLSet s, rp)
+    return x
 
 
 
@@ -150,50 +178,43 @@ insert m k v = case HM.lookup k m of
   Just xs -> HM.insert k (nub $ v ++ xs) m
 
 
-addPromises :: MonadRP (RPState l)  l rel m=> l -> Int -> [l] -> m ()
+addPromises :: MonadRP (RPState l) l rel m => l -> Int -> [l] -> m ()
 addPromises l i lst = do
-    RPState (lset, rp) <- getRPState
-    let genl = List.map (l, i, , False) lst 
-    let nrl = case HM.lookup l rp of
-            Nothing -> insert rp l genl
-            Just ls -> insert
-              rp
-              l
-              (List.filter (\(l1, i, l2, _) -> (l1, i, l2, True) `notElem` ls)
-                           genl
-              ) 
-    putRPState $ RPState (lset, nrl)
+  RPState (lset, rp) <- getRPState
+  let genl = List.map (l, i, , False) lst
+  let
+    nrl = case HM.lookup l rp of
+      Nothing -> insert rp l genl
+      Just ls -> insert
+        rp
+        l
+        (List.filter (\(l1, ii, l2, _) -> (l1, ii, l2, True) `notElem` ls) genl)
+  putRPState $ RPState (lset, nrl)
 
-enableRP    :: MonadRP (RPState l) l rel m => l  -> m () 
+enableRP :: MonadRP (RPState l) l rel m => l -> m ()
 enableRP l = do
-    RPState (lset, rp) <- getRPState
-    let ls = HM.keys lset
-    let nrl = HM.mapMaybeWithKey
-            (\k lst -> Just
-              (List.map
-                (\v@(l1, i, l2, b) ->
-                  if l2 == l && l1 `elem` ls then (l1, i, l2, True) else v
-                )
-                lst
-              )
-            )
-            rp
-        -- in  traceShow ("post" ++ show nrl)
-    --put (LIOState lcurr st nt assocnt (Rep nrl) id)
-    putRPState $ RPState (lset, nrl)
+  RPState (lset, rp) <- getRPState
+  let ls = HM.keys lset
+  let nrl = HM.mapMaybe
+        (Just . List.map
+          (\v@(l1, i, l2, _) ->
+            if l2 == l && l1 `elem` ls then (l1, i, l2, True) else v
+          )
+        )
+        rp
+      -- in  traceShow ("post" ++ show nrl)
+  --put (LIOState lcurr st nt assocnt (Rep nrl) id)
+  putRPState $ RPState (lset, nrl)
 
 
-disableRP   ::MonadRP (RPState l)  l rel m=> l -> Int -> m ()
-disableRP l i =  do
-    RPState (lset, rp) <- getRPState
-    let newrl = 
-            HM.mapMaybeWithKey
-              -- (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
-            (\k lst -> Just
-              (List.filter (\v@(l1, i1, l2, b) -> l1 /= l && i /= i1) lst)
-            )
-            rp
-          
-      -- in  traceShow ("post" ++ show newrl)
-    putRPState $ RPState (lset, newrl)
+disableRP :: MonadRP (RPState l) l rel m => l -> Int -> m ()
+disableRP l i = do
+  RPState (lset, rp) <- getRPState
+  let newrl = HM.mapMaybe
+            -- (\k lst -> Just (List.map (\v@(l1, i1, l2, b)-> if l1 == l && i == i1 then (l1,i1,l2, False) else v) lst))
+        (Just . List.filter (\(l1, i1, _, _) -> l1 /= l && i /= i1))
+        rp
+
+    -- in  traceShow ("post" ++ show newrl)
+  putRPState $ RPState (lset, newrl)
 

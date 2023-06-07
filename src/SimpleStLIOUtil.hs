@@ -12,7 +12,7 @@ reflTransClosure xs =
   let rxs = [(e,e) | (e,_) <- xs] ++ [(e,e) | (_,e) <- xs]
   in nub $ rxs ++ transClosure xs
 
-refl :: Eq b => [b] -> [(b, b)]
+refl :: [b] -> [(b, b)]
 refl lst = [(e,e) | e <- lst]
 
 -- | Returns the transitive closure of the relations specified in its argument.
