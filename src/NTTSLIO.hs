@@ -122,15 +122,15 @@ instance (MonadIFC st scurr rel l m, MonadNTT (NTTState l) l (StateT (NTTState l
   get          = lift get
   put          = lift . put
   modify       = lift . modify
-  -- setUserState news= do
-  --   lset <- getLSet <$> getNTState
-  --   oldRel <- getRelation lset
-  --   s      <- get
-  --   put $ setScurr news s
-  --   newRel <- getRelation lset
-  --   when (any (incUpperSet (oldRel) (newRel)) $ HM.keys lset)
-  --        (fail "incUpperClosure check failed")
-  --   lift $ setUserState news
+  setUserState news= do
+    lset <- getLSet <$> getNTState
+    oldRel <- getRelation lset
+    s      <- get
+    put $ setScurr news s
+    newRel <- getRelation lset
+    when (any (incUpperSet (oldRel) (newRel)) $ HM.keys lset)
+         (fail "incUpperClosure check failed")
+    lift $ setUserState news
 
   resetOP      = do
     s  <- getNTState
