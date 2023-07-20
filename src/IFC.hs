@@ -25,6 +25,7 @@ module IFC
   , Labeled(..)
   , LIORef(..)
   , LV(..)
+  , check
   ) where
 
 
@@ -45,6 +46,7 @@ import qualified Data.HashMap.Strict           as HM
 import           Data.HashSet
 import           Data.Hashable
 import           Data.IORef                     ( IORef )
+import Data.HashMap.Internal.Strict (HashMap)
 
 
 class HasLSet st l | st -> l where
@@ -89,8 +91,6 @@ class -- (MonadState (st rel l) m,
 
   label ::  l -> a -> m (Labeled l a)
 
-
-
   labelInternal :: l -> a -> m (Labeled l a)
 
   unlabel ::  Labeled l a -> m a
@@ -99,12 +99,12 @@ class -- (MonadState (st rel l) m,
 
   setUserState ::  scurr -> m ()
 
-  getRelation ::  m (rel l)
+  getRelation :: HashMap l [Int] -> m (rel l)
 
   toLabeled ::  l -> m a -> m (Labeled l a)
   
   resetOP :: m (m ())
-
+ 
   readIORef ::  LIORef l a -> m a
 
   writeIORef ::  LIORef l a -> a -> m ()
@@ -147,6 +147,11 @@ instance LV Labeled l  where
   getLabel' = labelOf
   getId'    = idOf
 
+check :: MonadIFC st scurr rel l m => HashMap l [Int] -> l -> m ()
+check lset l = do
+    rel <- getRelation lset
+    let checkPassed = and [ lrt rel x l | x <- HM.keys lset ]
+    unless checkPassed (fail "label check failed")
 
 
 

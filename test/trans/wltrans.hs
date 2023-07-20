@@ -14,10 +14,10 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use infix" #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module WLTrans (run, run1, whitelisting) where
--- module Main
---   ( main
---   ) where
+-- module WLTrans (run, run1, whitelisting, wlrp) where
+module Main
+  ( main
+  ) where
 
 import Control.Monad.Trans.Maybe
 import           Control.Monad.State.Strict
@@ -44,12 +44,17 @@ import           SLIO
 import NTTSLIO
 import           SimpleStLIOUtil
 import NWL
+import Test.HUnit
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Data.Monoid
+import Control.Monad
 
 
 newtype User = User String
   deriving (Eq, Show, Hashable)
 
-newtype Rel l= Rel [(l, l)] deriving (Show )
+newtype Rel l= Rel [(l, l)] deriving (Show)
 
 instance Relation Rel User where
   lrt (Rel rel) l1 l2 = (l1, l2) `elem` rel
@@ -98,6 +103,7 @@ initNTTState :: NTTState User
 initNTTState = NTTState {
                      ntlab = HM.empty
                      , assocnt = HM.empty
+                     , NTTSLIO.lset = HM.empty
   }
 
 initNWLState :: NWLState User
@@ -117,6 +123,24 @@ disallowSP = do
   Rel st <- getScurr <$> get
   setUserState (Rel $ st \\ [(User "Secret"  , User "Pub" )])
 
+wlrp :: (MonadIFC st (Rel User) Rel User m, MonadRP rp User Rel m, MonadNTT (nt User) User m, MonadNWL (NWLState User) User m) => m ()
+wlrp = do
+    secret <- label (User "Secret" ) "secret"
+    k <- label (User "Key" ) "key"
+    -- secret <- asRP unlabel [User "Pub"] secret
+    
+    pub <- toLabeled (User "Pub" ) (do 
+      secret <- asRP unlabel [User "Pub"] secret
+      k <- unlabel k
+      asNWL $ label (User "Pub" ) (k ++ secret)
+      return (k ++ secret)
+      )
+    -- pub <- label (User "Pub" ) (k ++ secret)
+    disallowSP
+    k <- unlabel k
+    _ <- label (User "Pub" ) k
+    return ()
+
 whitelisting :: (MonadIFC st (Rel User) Rel User m, MonadRP rp User Rel m, MonadNTT (nt User) User m, MonadNWL (NWLState User) User m) => m ()
 whitelisting = do
     secret <- label (User "Secret" ) "secret"
@@ -135,6 +159,33 @@ whitelisting = do
     _ <- label (User "Pub" ) k
     return ()
 
+interact :: (MonadIFC st (Rel User) Rel User m, MonadRP rp User Rel m, MonadNTT (nt User) User m, MonadNWL (NWLState User) User m) => m ()
+interact = do
+    secret <- label (User "Secret" ) "secret"
+    k <- label (User "Key" ) "key"
+    -- secret <- asRP unlabel [User "Pub"] secret
+    
+    pub <- toLabeled (User "Pub" ) (do 
+      -- s <- label (User "A1" ) "s"
+      secret <- asNT unlabel secret
+      k <- unlabel k
+      asNWL $ label (User "Pub" ) (k ++ secret) 
+      return (k ++ secret)
+      )
+
+    pub' <- toLabeled (User "Pub1" ) (do 
+      secret <- unlabel pub
+      k <- unlabel k
+      asNWL $ label (User "Pub1" ) (k ++ secret)
+      return (k ++ secret)
+      )
+    
+
+    -- pub <- label (User "Pub" ) (k ++ secret)
+    disallowSP
+    k <- unlabel k
+    _ <- label (User "Pub" ) k
+    return ()
 
 run act = do
     (r, s) <- runStateT (runStateT (runStateT (runStateT act initNWLState) initNTTState) initRPState) initState -- (runMaybeT rptt)
@@ -143,17 +194,22 @@ run act = do
     return ()
 
 
+run1 :: Show a => StateT (NTTState User) (StateT (RPState User) (StateT (NWLState User) (StateT (SLIOState (Rel User) User) IO))) a -> IO ()
 run1 act = do
     (r, s) <- runStateT (runStateT (runStateT (runStateT act initNTTState) initRPState) initNWLState) initState -- (runMaybeT rptt)
     print r
     print s
     return ()
--- main :: IO ()
--- main = do
---     (r, s) <- runStateT (runStateT (runStateT (runStateT whitelisting initNWLState) initNTTState) initRPState) initState -- (runMaybeT rptt)
---     print r
---     print s
---     return ()
+
+main :: IO ()
+main = defaultMainWithOpts
+       [testCase "whitelisting forbidden, stack: [wl (rp)]" $ run whitelisting
+       , testCase "whitelisting forbidden, stack: [rp (wl)]" $ run1 whitelisting
+       , testCase "wlrp allowed, stack: [wl (rp)]" $ run wlrp
+       , testCase "wlrp allowed, stack: [rp (wl)]" $ run1 wlrp
+       -- , testCase "ntrp forbidden" $ NTRPTrans.run ntrp
+       ]
+       mempty
 
 -- instance MonadNTT (nt l) l m => MonadNTT (nt l) l (MaybeT m) where
 --   asNT f ld= do
@@ -221,7 +277,7 @@ instance {-# OVERLAPS #-} (MonadRP rp l rel m, MonadNTT (nt l) l (StateT (nt l) 
   getRPState = lift getRPState
   putRPState = lift . putRPState
   modifyRPState = lift . modifyRPState
-  getRPRelation = lift getRPRelation
+  getRPRelation lset= lift $ getRPRelation lset
 
 instance  (MonadRP rp l rel m, MonadNWL (NWLState l)  l (StateT (NWLState l) m))
   => MonadRP rp l rel (StateT (NWLState l) m) where
@@ -232,7 +288,7 @@ instance  (MonadRP rp l rel m, MonadNWL (NWLState l)  l (StateT (NWLState l) m))
   getRPState = lift getRPState
   putRPState = lift . putRPState
   modifyRPState = lift . modifyRPState
-  getRPRelation = lift getRPRelation
+  getRPRelation lset= lift $ getRPRelation lset
 
 instance  (MonadNTT (nt l) l m, MonadNWL (NWLState l) l (StateT (NWLState l) m))
   => MonadNTT (nt l) l (StateT (NWLState l) m) where
@@ -260,6 +316,7 @@ instance (MonadNWL (nw l) l m, MonadNTT (NTTState l) l (StateT (NTTState l) m)) 
     return x
   getNWLState    = lift getNWLState
   putNWLState    = lift . putNWLState
+  modifyNWLState = lift . modifyNWLState
 
 instance (MonadNWL (nw l) l m, MonadRP (RPState l) l rel (StateT (RPState l) m)) => MonadNWL (nw l) l (StateT (RPState l) m) where
   asNWL f= do 
@@ -268,3 +325,4 @@ instance (MonadNWL (nw l) l m, MonadRP (RPState l) l rel (StateT (RPState l) m))
     return x
   getNWLState    = lift getNWLState
   putNWLState    = lift . putNWLState
+  modifyNWLState = lift . modifyNWLState

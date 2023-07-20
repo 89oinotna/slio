@@ -38,8 +38,13 @@ import           IFC
 data NTTState l = NTTState
   { ntlab   :: HM.HashMap l [Int]
   , assocnt :: HM.HashMap (l, Int) (HM.HashMap l [Int])
+  , lset   :: HM.HashMap l [Int]
   }--, ids :: Map String Int }
   deriving Show
+
+instance HasLSet (NTTState l) l where
+  getLSet = lset
+  setLSet lset s = s { lset = lset }
 
 type NTTSLIO l m a = StateT (NTTState l) m a -- => s -> ((s' => (a,s')),s)
 
@@ -59,7 +64,7 @@ instance (Eq l, Hashable l) => HasNT (NTTState l) l where
   getNTAssoc = assocnt
   setNTAssoc ass s = s { assocnt = ass }
 
-class (Monad m, HasNT nt l) => MonadNTT nt l m | m -> nt l where
+class (Monad m, HasNT nt l, HasLSet nt l  ) => MonadNTT nt l m | m -> nt l where
   asNT :: LV t l
     => (t l a -> m a)
     -> t l a
@@ -68,7 +73,7 @@ class (Monad m, HasNT nt l) => MonadNTT nt l m | m -> nt l where
   putNTState :: nt -> m ()
   modifyNTState :: (nt -> nt) -> m ()
 
-instance (Monad m, HasNT (NTTState l) l) => MonadNTT (NTTState l) l (StateT (NTTState l) m) where
+instance (Monad m, HasNT (NTTState l) l, HasLSet (NTTState l) l) => MonadNTT (NTTState l) l (StateT (NTTState l) m) where
   asNT f ld = do
     taintNT (getLabel' ld) (getId' ld)
     f ld
@@ -84,12 +89,21 @@ instance (MonadIFC st scurr rel l m, MonadNTT (NTTState l) l (StateT (NTTState l
     x <- lift (labelInternal l a)
     addAssocNt (getLabel' x) (getId' x)
     return x
+
   unlabel lv@(Lb l _ i) = do
+    x <- lift $ unlabel lv
     nt <- HM.lookupDefault HM.empty (l, i) . getNTAssoc <$> State.get
     State.modify $ modifyNTLab (HM.unionWith List.union nt)
-    lift $ modify $ modifyLSet (HM.unionWith List.union nt)
-    lift $ unlabel lv -- taint l i >> return a
-  guard l = lift $ guard l
+    -- lift $ modify $ modifyLSet (HM.unionWith List.union nt)
+    lset <- getLSet <$> get
+    let lset' = HM.unionWith List.union nt lset
+    modifyNTState $ modifyLSet (HM.unionWith List.union lset')
+    return x
+     -- taint l i >> return a
+  guard l = do
+    lset <- getLSet <$> getNTState
+    check lset l
+    lift $ guard l
     -- do
     -- lc <- getLSet <$> (lift get)
     -- rel <- getRelation
@@ -101,14 +115,23 @@ instance (MonadIFC st scurr rel l m, MonadNTT (NTTState l) l (StateT (NTTState l
     --             $ HM.keys (getLSet s)
     --         ) (fail "incUpperClosure check failed")
     --     lift . put $ setRel rel s
-  getRelation  = lift getRelation -- getRel <$> (lift get)
+  getRelation  lset= lift $ getRelation lset-- getRel <$> (lift get)
 
 
 
   get          = lift get
   put          = lift . put
   modify       = lift . modify
-  setUserState = lift . setUserState
+  -- setUserState news= do
+  --   lset <- getLSet <$> getNTState
+  --   oldRel <- getRelation lset
+  --   s      <- get
+  --   put $ setScurr news s
+  --   newRel <- getRelation lset
+  --   when (any (incUpperSet (oldRel) (newRel)) $ HM.keys lset)
+  --        (fail "incUpperClosure check failed")
+  --   lift $ setUserState news
+
   resetOP      = do
     s  <- getNTState
     rs <- lift resetOP
@@ -132,19 +155,20 @@ instance (MonadIFC st scurr rel l m, MonadNTT (NTTState l) l (StateT (NTTState l
     return x
 
   newIORef l a = guard l >> newIORefInternal l a
+
   readIORef lv = do
       nt <- HM.lookupDefault HM.empty (getLabel' lv, getId' lv) . getNTAssoc <$> State.get
       State.modify $ modifyNTLab (HM.unionWith List.union nt)
-      lift $ modify $ modifyLSet (HM.unionWith List.union nt)
+      modifyNTState $ modifyLSet (HM.unionWith List.union nt)
+      -- lift $ modify $ modifyLSet (HM.unionWith List.union nt)
       lift $ readIORef lv
 
   writeIORef lv b = guard (getLabel' lv) >> writeIORefInternal lv b
   
-  writeIORefInternal lv b = do
-      nt <- HM.lookupDefault HM.empty (getLabel' lv, getId' lv) . getNTAssoc <$> State.get
-      State.modify $ modifyNTLab (HM.unionWith List.union nt)
-      lift $ modify $ modifyLSet (HM.unionWith List.union nt)
-      lift $ writeIORefInternal lv b
+  writeIORefInternal lv a = do
+      lift $ writeIORefInternal lv a
+      addAssocNt (getLabel' lv) (getId' lv)
+      
 
 
 taintNT :: (Eq l, Hashable l, HasNT nt l, MonadNTT nt l m) => l -> Int -> m ()

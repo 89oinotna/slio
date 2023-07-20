@@ -71,7 +71,7 @@ class (Monad m, ToRelation rp rel l) => MonadRP rp l rel m | m -> rp l where
   getRPState :: m rp
   putRPState :: rp -> m ()
   modifyRPState :: (rp -> rp) -> m ()
-  getRPRelation :: m (rel l)
+  getRPRelation :: HM.HashMap l [Int] -> m (rel l)
 
 instance (Monad m, ToRelation (RPState l) rel l) => MonadRP (RPState l)  l rel (StateT (RPState l) m) where
   asRP f lst ld = do
@@ -80,7 +80,10 @@ instance (Monad m, ToRelation (RPState l) rel l) => MonadRP (RPState l)  l rel (
   getRPState    = State.get
   putRPState    = State.put
   modifyRPState = State.modify
-  getRPRelation = toRelation <$> State.get
+  getRPRelation lset = do
+    modifyRPState (\(RPState (_, rp)) -> RPState (lset, rp))
+    news <- getRPState
+    return $ toRelation news
 
 instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState l) m))
   => MonadIFC st scurr rel l (StateT (RPState l) m) where
@@ -99,31 +102,31 @@ instance (MonadIFC st scurr rel l m, MonadRP (RPState l) l rel (StateT (RPState 
 
   guard l = do
     lc  <- getLSet <$> get
-    rel <- getRelation
+    rel <- getRelation lc
     let checkPassed = and [ lrt rel x l | x <- HM.keys lc ]
     unless checkPassed (fail "rp label check failed")
 
-
-  getRelation = do
-    rprel <- getRPRelation
-    rel   <- lift getRelation
+  getRelation lset= do
+    rprel <- getRPRelation lset
+    rel   <- lift $ getRelation lset
     return (rprel `union` rel) -- getRel <$> (lift get)
 
   get = lift get
   put s = do
-    RPState (_, rp) <- getRPState
-    putRPState $ RPState (getLSet s, rp)
+    -- RPState (_, rp) <- getRPState
+    -- putRPState $ RPState (getLSet s, rp)
     lift $ put s
   modify s = do
     lift $ modify s
-    lset            <- getLSet <$> get
-    RPState (_, rp) <- getRPState
-    putRPState $ RPState (lset, rp)
+    -- lset            <- getLSet <$> get
+    -- RPState (_, rp) <- getRPState
+    -- putRPState $ RPState (lset, rp)
   setUserState scurr = do
-    oldRel <- getRelation
+    lset <- getLSet <$> get
+    oldRel <- getRelation lset
     s      <- get
     put $ setScurr scurr s
-    newRel <- getRelation
+    newRel <- getRelation lset
     when (any (incUpperSet (oldRel) (newRel)) $ HM.keys (getLSet s))
          (fail "incUpperClosure check failed")
   resetOP = do

@@ -14,11 +14,11 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use infix" #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module NTRPTrans 
-(run, ntrp) where
--- module Main
---   ( main
---   ) where
+-- module NTRPTrans 
+-- (run, ntrp) where
+module Main
+  ( main
+  ) where
 
 
 import           Control.Monad.State.Strict
@@ -43,7 +43,11 @@ import           RP
 import           SLIO
 import NTTSLIO
 import           SimpleStLIOUtil
-
+import Test.HUnit
+import Test.Framework
+import Test.Framework.Providers.HUnit
+import Data.Monoid
+import Control.Monad
 
 newtype User = User String
   deriving (Eq, Show, Hashable)
@@ -86,7 +90,7 @@ instance Relation Rel l => ToRelation (RPState l) Rel l where
 
 initState :: SLIOState (Rel User) User
 initState = SLIOState
-  { lset  = HM.empty
+  { SLIO.lset  = HM.empty
   , scurr = Rel
               [(User "NSA", User "Military"), (User "Military", User "Another")]
   , newid = 0
@@ -100,6 +104,8 @@ initNTTState :: NTTState User
 initNTTState = NTTState {
                      ntlab = HM.empty
                      , assocnt = HM.empty
+                     , NTTSLIO.lset = HM.empty
+                     
   }
 
 disallowNM :: (MonadIFC st (Rel User) Rel User m) => m ()
@@ -142,6 +148,19 @@ run act =do
   print r
   print s 
 
+run1 act =do
+  (r, s) <-  runStateT (runStateT (runStateT act initRPState) initNTTState) initState -- (runMaybeT rptt)
+  print r
+  print s 
+
+main :: IO ()
+main = defaultMainWithOpts
+       [testCase "stack: [nt (rp)]" $ run ntrp
+       , testCase "stack: [rp (nt)]" $ run1 ntrp
+       -- , testCase "ntrp forbidden" $ NTRPTrans.run ntrp
+       ]
+       mempty
+
 -- main :: IO ()
 -- main = do
 --   (r, s) <-  runStateT (runStateT (runStateT rptt initNTTState) initRPState) initState -- (runMaybeT rptt)
@@ -157,9 +176,16 @@ instance  (MonadRP rp l rel m, MonadNTT (NTTState l)  l (StateT (NTTState l) m))
   getRPState = lift getRPState
   putRPState = lift . putRPState
   modifyRPState = lift . modifyRPState
-  getRPRelation = lift getRPRelation
+  getRPRelation lset= lift $ getRPRelation lset
 
--- instance MonadIFC st scurr rel l m => MonadIFC st scurr rel l (MaybeT m) where
+instance {-# OVERLAPS #-} (MonadNTT nt l m, MonadRP rp l rel (StateT rp m)) => MonadNTT nt l (StateT rp m) where
+  asNT f ld = do
+    x <- f ld
+    _ <- lift (asNT (\_ -> return x) ld)
+    return x
+  getNTState = lift getNTState
+  putNTState = lift . putNTState
+  modifyNTState = lift . modifyNTState 
 
 
 

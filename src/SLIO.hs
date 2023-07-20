@@ -45,8 +45,10 @@ import           Data.List                      ( nub )
 import           IFC
 import Data.IORef (readIORef, newIORef, writeIORef)
 
+type Lset l = HM.HashMap l [Int]
+
 data SLIOState scurr l = SLIOState
-  { lset  :: HM.HashMap l [Int]
+  { lset  :: Lset l
   , scurr :: scurr
   , newid :: Int
   }
@@ -70,10 +72,25 @@ instance HasLVIds (SLIOState rel l) where
   setId i s = s { newid = i }
   incId s = s { newid = succ $ newid s }
 
--- instance Relation rel l => HasRelation SLIOState rel l where
---   getRel = scurr
---   setRel rel st = st { scurr = rel }
 
+-- class (Monad m, ToRelation scurr rel l) => MonadSLIO scurr rel l m | m -> scurr l where 
+--   getSLIOState :: m scurr
+--   putSLIOState :: scurr -> m ()
+--   modifySLIOState :: (scurr -> scurr) -> m ()
+
+
+-- -- instance (Monad io, ToRelation scurr rel l, HasScurr (SLIOState scurr l) scurr,
+--       MutableRelation rel l, HasLSet (SLIOState scurr l) l, MonadFail io)
+--   => MonadSLIO scurr rel l (StateT (SLIOState scurr l) io) where
+--     getSLIOState = getScurr <$> State.get
+--     putSLIOState newState = do
+--       s <- State.get
+--       when
+--         ( any (incUpperSet (toRelation $ getScurr s) (toRelation newState))
+--         $ HM.keys (getLSet s)
+--         )
+--         (fail "incUpperClosure check failed")
+--       State.put $ setScurr newState s
 
 instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
       HasScurr (SLIOState scurr l) scurr, ToRelation scurr rel l,
@@ -82,11 +99,13 @@ instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
   label l a = guard l >> labelInternal l a
   labelInternal l a = incAndGetId >>= return . (Lb l a)
   unlabel (Lb l a i) = taint l i >> return a
+
   guard l = do
     lc  <- getLSet <$> get
-    rel <- getRelation
-    let checkPassed = and [ lrt rel x l | x <- HM.keys lc ]
-    unless checkPassed (fail "label check failed")
+    check lc l
+
+  
+  getRelation lset= toRelation . getScurr <$> get
   setUserState newState = do
     s <- get
     when
@@ -95,14 +114,6 @@ instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
       )
       (fail "incUpperClosure check failed")
     State.put $ setScurr newState s
-  getRelation = toRelation . getScurr <$> get
-  -- toLabeled l m = do
-  --   s1  <- get
-  --   x <- m
-  --   guard l
-  --   id <- incAndGetId
-  --   put $ setId id s1
-  --   return $ Lb l x id
   get         = State.get
   put         = State.put
   modify      = State.modify

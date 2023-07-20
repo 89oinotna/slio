@@ -3,8 +3,8 @@ import Test.Framework
 import Test.Framework.Providers.HUnit
 import Data.Monoid
 import Control.Monad
-import WLTrans
--- import NTRPTrans
+import qualified WLTrans
+import qualified NTRPTrans
 
 ass = assertEqual "prova" 1 1
 test1 = TestCase (assertEqual "prova" 1 1)
@@ -27,8 +27,10 @@ assertFailure msg = ioError (userError ("HUnit:" ++ msg))
 
 main :: IO ()
 main = defaultMainWithOpts
-       [testCase "whitelisting forbidden" $ WLTrans.run whitelisting
-       , testCase "whitelisting forbidden" $ WLTrans.run1 whitelisting
+       [testCase "whitelisting forbidden, stack: [wl (rp)]" $ WLTrans.run WLTrans.whitelisting
+       , testCase "whitelisting forbidden, stack: [rp (wl)]" $ WLTrans.run1 WLTrans.whitelisting
+       , testCase "wlrp allowed, stack: [wl (rp)]" $ WLTrans.run WLTrans.wlrp
+       , testCase "wlrp allowed, stack: [rp (wl)]" $ WLTrans.run1 WLTrans.wlrp
        -- , testCase "ntrp forbidden" $ NTRPTrans.run ntrp
        ]
        mempty
