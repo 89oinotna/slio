@@ -37,17 +37,20 @@ library
   import: common-options
   exposed-modules:
     -- SimpleStLIO
-    NTTSLIO
-    RP
-    SLIO
-    NWL
-    IFC
+    -- NTTSLIO
+    -- RP
+    -- SLIO
+    -- NWL
+    -- IFC
+    -- Prova
+    DypIFC
+    TimeTransitive
     -- DLM
-  --  DCLabels.Core
-  --  DCLabels.DSL
-  --  DCLabels.TCB
-    SimpleStLIOUtil
-  --  DCLabels
+    --  DCLabels.Core
+    --  DCLabels.DSL
+    --  DCLabels.TCB
+    -- SimpleStLIOUtil
+    --  DCLabels
   hs-source-dirs:
     src
   --ghc-options:
@@ -94,7 +97,7 @@ library
 -- test-suite rptrans
 --   import: common-options
 --   type: exitcode-stdio-1.0
---   main-is:  rptrans.hs
+--   main-is:  rptrans2.hs
 --   hs-source-dirs:
 --     test/trans,
 --     src
@@ -110,52 +113,52 @@ library
 --     SimpleStLIOUtil
 --   default-language: Haskell2010
 
-test-suite wltrans
-  import: common-options
-  type: exitcode-stdio-1.0
-  main-is:  wltrans.hs
-  hs-source-dirs:
-    test/trans,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-    ,slio
-    , transformers 
-    , test-framework
-    , test-framework-hunit
-    , HUnit
-  other-modules:
-    RP,
-    IFC,
-    SLIO,
-    NWL,
-    NTTSLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite wltrans
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  wltrans.hs
+--   hs-source-dirs:
+--     test/trans,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--     ,slio
+--     , transformers 
+--     , test-framework
+--     , test-framework-hunit
+--     , HUnit
+--   other-modules:
+--     RP,
+--     IFC,
+--     SLIO,
+--     NWL,
+--     NTTSLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
 
-test-suite ntrptrans
-  import: common-options
-  type: exitcode-stdio-1.0
-  main-is:  ntrptrans.hs
-  hs-source-dirs:
-    test/trans,
-    src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  other-modules: IFC NTTSLIO SLIO
-  build-depends:
-    ,slio
-    , transformers 
-    , test-framework
-    , test-framework-hunit
-    , HUnit
-  other-modules:
-    -- SimpleStLIO,
-    RP,
-    IFC,
-    SLIO,
-    NTTSLIO,
-    SimpleStLIOUtil
-  default-language: Haskell2010
+-- test-suite ntrptrans
+--   import: common-options
+--   type: exitcode-stdio-1.0
+--   main-is:  ntrptrans.hs
+--   hs-source-dirs:
+--     test/trans,
+--     src
+--   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+--   other-modules: IFC NTTSLIO SLIO
+--   build-depends:
+--     ,slio
+--     , transformers 
+--     , test-framework
+--     , test-framework-hunit
+--     , HUnit
+--   other-modules:
+--     -- SimpleStLIO,
+--     RP,
+--     IFC,
+--     SLIO,
+--     NTTSLIO,
+--     SimpleStLIOUtil
+--   default-language: Haskell2010
 
 -- -- test-suite dlmtest
 -- --   type: exitcode-stdio-1.0

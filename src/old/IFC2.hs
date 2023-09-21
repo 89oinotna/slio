@@ -13,6 +13,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeOperators #-}
 module IFC
   ( MonadIFC(..)
   , HasLSet(..)
@@ -25,7 +26,6 @@ module IFC
   , Labeled(..)
   , LIORef(..)
   , LV(..)
-  , check
   ) where
 
 
@@ -46,7 +46,8 @@ import qualified Data.HashMap.Strict           as HM
 import           Data.HashSet
 import           Data.Hashable
 import           Data.IORef                     ( IORef )
-import Data.HashMap.Internal.Strict (HashMap)
+import Data.Type.Equality ((:~:), type (==))
+import Control.Monad.State (get)
 
 
 class HasLSet st l | st -> l where
@@ -80,45 +81,76 @@ class Relation rel l => MutableRelation rel l where
 class Relation rel l => ToRelation state rel l | state -> rel l where
     toRelation :: state -> rel l
 
-class -- (MonadState (st rel l) m, 
-    -- (HasRelation st rel l, 
-    (HasScurr (st scurr l) scurr,
-    MutableRelation rel l, HasLSet (st scurr l) l,
-    HasLVIds (st scurr l), MonadFail m, MonadIO m,
-    ToRelation scurr rel l
+class SLIO scurr rel l m where
+    setUserState :: scurr -> m ()
+
+class
+    (
+    Relation rel l, HasLSet st l,
+    HasLVIds st, MonadFail m, MonadIO m
     )
-    => MonadIFC st scurr rel l m | m -> st scurr l where
+    => MonadIFC st rel l m | m ->st where
 
   label ::  l -> a -> m (Labeled l a)
 
-  labelInternal :: l -> a -> m (Labeled l a)
+  label' :: l -> a -> m (Labeled l a)
 
   unlabel ::  Labeled l a -> m a
 
   guard ::  l -> m ()
 
-  setUserState ::  scurr -> m ()
-
-  getRelation :: HashMap l [Int] -> m (rel l)
+  getRelation ::  m (rel l)
 
   toLabeled ::  l -> m a -> m (Labeled l a)
-  
+
   resetOP :: m (m ())
- 
+
   readIORef ::  LIORef l a -> m a
 
   writeIORef ::  LIORef l a -> a -> m ()
 
   newIORef ::  l -> a -> m (LIORef l a)
 
-  newIORefInternal ::  l -> a -> m (LIORef l a)
+  newIORef' ::  l -> a -> m (LIORef l a)
 
-  writeIORefInternal ::  LIORef l a -> a -> m ()
+  writeIORef' ::  LIORef l a -> a -> m ()
 
   -- User must not use those functions
-  get :: m (st scurr l)
-  put :: st scurr l -> m ()
-  modify :: (st scurr l -> st scurr l) -> m ()
+--   get :: m (st l)
+--   put :: st  l -> m ()
+--   modify :: (st  l -> st  l) -> m ()
+
+data IFCState l = IFCState
+  { lset  :: HM.HashMap l [Int]
+  , newid :: Int
+  }
+  deriving Show
+
+instance HasLSet (IFCState l) l where
+  getLSet = lset
+  setLSet lset' st = st { lset = lset' }
+  modifyLSet m st = setLSet (m (getLSet st)) st
+
+instance HasLVIds (IFCState l) where
+  getId = newid
+  setId newid' st = st { newid = newid' }
+  incId st = setId (getId st + 1) st
+
+instance (MonadIO m, MonadFail m, Relation rel l) => (MonadIFC (IFCState l) rel l (StateT (IFCState l) m)) where
+  label l a= guard l >> label' l a
+  label' l a= incAndGetId >>= return . (Lb l a)
+  unlabel = taint
+  guard = _
+  getRelation = _
+  toLabeled = _
+  resetOP = _
+  readIORef = _
+  writeIORef = _
+  newIORef = _
+  newIORefInternal = _
+  writeIORefInternal = _
+
+-- instance (MonadIFC st rel l m, SLIO scurr rel l m, (st == scurr) ~ False) => MonadIFC st rel l (StateT scurr m) where
 
 
 data Labeled l a = Lb
@@ -147,12 +179,25 @@ instance LV Labeled l  where
   getLabel' = labelOf
   getId'    = idOf
 
-check :: MonadIFC st scurr rel l m => HashMap l [Int] -> l -> m ()
-check lset l = do
-    rel <- getRelation lset
-    let checkPassed = and [ lrt rel x l | x <- HM.keys lset ]
-    unless checkPassed (fail "label check failed")
 
+incAndGetId
+  :: (Monad m, HasLVIds st, MonadIFC st rel l m, MonadState st m) => m Int
+incAndGetId = do
+  s <- get
+  modify incId
+  return $ getId s
 
+-- taint
+--   :: (Eq l, Hashable l, HasLSet (st scurr l) l, MonadIFC st scurr rel l m)
+--   => l
+--   -> Int
+--   -> m ()
+-- taint l i = modify $ modifyLSet (insert l i)
+
+-- insert
+--   :: (Hashable k, Eq a, Eq k) => k -> a -> HM.HashMap k [a] -> HM.HashMap k [a]
+-- insert k v m = case HM.lookup k m of
+--   Nothing -> HM.insert k [v] m
+--   Just xs -> HM.insert k (nub $ v : xs) m
 
 

@@ -95,7 +95,7 @@ instance HasLVIds (SLIOState rel l) where
 instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
       HasScurr (SLIOState scurr l) scurr, ToRelation scurr rel l,
   HasLVIds (SLIOState scurr l), MonadFail (StateT (SLIOState scurr l) io))
-  => MonadIFC SLIOState scurr rel l (StateT (SLIOState scurr l) io) where
+  => MonadIFC (SLIOState scurr l) scurr rel l (StateT (SLIOState scurr l) io) where
   label l a = guard l >> labelInternal l a
   labelInternal l a = incAndGetId >>= return . (Lb l a)
   unlabel (Lb l a i) = taint l i >> return a
@@ -148,14 +148,14 @@ instance (MonadIO io, MutableRelation rel l, HasLSet (SLIOState scurr l) l,
   writeIORefInternal (LIORef l a i) b = liftIO (Data.IORef.writeIORef a b)
 
 incAndGetId
-  :: (Monad m, HasLVIds (st scurr l), MonadIFC st scurr rel l m) => m Int
+  :: (Monad m, HasLVIds st, MonadIFC st scurr rel l m) => m Int
 incAndGetId = do
   s <- get
   modify incId
   return $ getId s
 
 taint
-  :: (Eq l, Hashable l, HasLSet (st scurr l) l, MonadIFC st scurr rel l m)
+  :: (Eq l, Hashable l, HasLSet st l, MonadIFC st scurr rel l m)
   => l
   -> Int
   -> m ()
